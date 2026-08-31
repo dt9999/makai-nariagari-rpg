@@ -40,6 +40,13 @@ type RenderNode = {
   kind: 'wood' | 'ore';
   n: number;
 };
+type RenderBase = {
+  id: number;
+  x: number;
+  y: number;
+  yaw: number;
+  level: number;
+};
 export type RenderWorld = {
   x: number;
   y: number;
@@ -53,16 +60,23 @@ export type RenderWorld = {
   attackKind: 'none' | 'normal' | 'heavy' | 'skill';
   hitAnim: number;
   buildAnim: number;
+  buildMode: boolean;
+  buildYaw: number;
+  bases: RenderBase[];
+  minions: number;
   facingX: number;
   facingY: number;
+  viewYaw: number;
+  viewPitch: number;
+  height: number;
   conquered: string[];
   mobs: RenderMob[];
   nodes: RenderNode[];
 };
 
 const SCALE = 0.018,
-  CENTER_X = 1200,
-  CENTER_Y = 780;
+  CENTER_X = 8000,
+  CENTER_Y = 4500;
 const worldX = (x: number) => (x - CENTER_X) * SCALE;
 const worldZ = (y: number) => (y - CENTER_Y) * SCALE;
 const owner = (world: RenderWorld, region: RenderRegion) =>
@@ -685,6 +699,7 @@ function createJointLimb(
   return { upper, lower, end, side };
 }
 
+// oxlint-disable-next-line no-unused-vars -- retained for a future optional third-person inspection mode
 function buildRiggedPlayer(job: string) {
   const root = new THREE.Group();
   addShadow(root, 0.58);
@@ -826,6 +841,220 @@ function buildRiggedPlayer(job: string) {
     prevX: Number.NaN,
     prevY: Number.NaN,
   };
+  return root;
+}
+
+function buildFirstPersonRig(job: string) {
+  const root = new THREE.Group();
+  const jobColors: Record<string, number> = {
+    blade: 0x8454c4,
+    berserker: 0xc34738,
+    mage: 0x4d66cc,
+    shadow: 0x278f82,
+    lancer: 0xb18235,
+    ruler: 0xb85282,
+    warlock: 0xd55236,
+    nightseer: 0x5376cd,
+    dragoon: 0xad8c35,
+  };
+  const color = jobColors[job] || 0x5d3b79;
+  const sleeve = new THREE.MeshStandardMaterial({
+    color,
+    roughness: 0.88,
+    depthTest: false,
+    depthWrite: false,
+  });
+  const skin = new THREE.MeshStandardMaterial({
+    color: 0x9564a5,
+    roughness: 0.7,
+    depthTest: false,
+    depthWrite: false,
+  });
+  const makeArm = (side: number) => {
+    const arm = new THREE.Group();
+    arm.position.set(side * 0.3, -0.31, -0.58);
+    const forearm = mesh(
+      geo.cylinder,
+      sleeve,
+      [0.085, 0.34, 0.085],
+      [0, -0.02, 0],
+      arm,
+      false,
+    );
+    forearm.rotation.x = -0.92;
+    mesh(geo.sphere, skin, [0.095, 0.095, 0.11], [0, 0.25, -0.25], arm, false);
+    root.add(arm);
+    return arm;
+  };
+  const leftArm = makeArm(-1),
+    rightArm = makeArm(1);
+  const weapon = buildWeapon(job, color);
+  weapon.position.set(0.02, 0.22, -0.25);
+  weapon.rotation.set(-0.18, 0, -0.22);
+  weapon.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) return;
+    const original = child.material as THREE.MeshStandardMaterial;
+    child.material = original.clone();
+    const material = child.material as THREE.MeshStandardMaterial;
+    material.depthTest = false;
+    material.depthWrite = false;
+    child.renderOrder = 20;
+  });
+  rightArm.add(weapon);
+  const glowMaterial = new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity: 0,
+    depthTest: false,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const spellGlow = mesh(
+    new THREE.RingGeometry(0.13, 0.2, 24),
+    glowMaterial,
+    [1, 1, 1],
+    [0, 0.2, -0.38],
+    leftArm,
+    false,
+  );
+  spellGlow.renderOrder = 21;
+  root.userData = {
+    leftArm,
+    rightArm,
+    weapon,
+    spellGlow,
+    gait: 0,
+    speedBlend: 0,
+    guardBlend: 0,
+  };
+  root.visible = !!job;
+  return root;
+}
+
+function animateFirstPersonRig(
+  rig: THREE.Group,
+  world: RenderWorld,
+  dt: number,
+  elapsed: number,
+  speedScene: number,
+) {
+  const data = rig.userData;
+  const leftArm = data.leftArm as THREE.Group,
+    rightArm = data.rightArm as THREE.Group,
+    weapon = data.weapon as THREE.Group,
+    spellGlow = data.spellGlow as THREE.Mesh;
+  data.speedBlend = THREE.MathUtils.damp(
+    data.speedBlend,
+    clamp01(speedScene / 3.9),
+    10,
+    dt,
+  );
+  data.guardBlend = THREE.MathUtils.damp(
+    data.guardBlend,
+    world.guarding ? 1 : 0,
+    16,
+    dt,
+  );
+  data.gait += dt * (2.4 + speedScene * 4.3);
+  const locomotion = data.speedBlend as number,
+    phase = data.gait as number,
+    bobX = Math.sin(phase) * 0.018 * locomotion,
+    bobY = Math.abs(Math.cos(phase * 2)) * 0.016 * locomotion;
+  rig.position.set(bobX, -bobY, 0);
+  rig.rotation.set(0, 0, -bobX * 0.45);
+  leftArm.position.set(-0.3, -0.31, -0.58);
+  rightArm.position.set(0.3, -0.31, -0.58);
+  leftArm.rotation.set(0, 0, -0.08);
+  rightArm.rotation.set(0, 0, 0.08);
+  weapon.rotation.set(-0.18, 0, -0.22);
+  const guard = data.guardBlend as number;
+  rightArm.position.lerp(new THREE.Vector3(0.08, -0.18, -0.48), guard);
+  rightArm.rotation.x -= guard * 0.45;
+  weapon.rotation.z += guard * 0.85;
+  leftArm.position.lerp(new THREE.Vector3(-0.12, -0.16, -0.5), guard);
+  let impact = 0;
+  if (world.attackAnim > 0 && world.attackTotal > 0) {
+    const progress = clamp01(1 - world.attackAnim / world.attackTotal),
+      heavy = world.attackKind === 'heavy' ? 1.25 : 1,
+      windEnd = world.attackKind === 'heavy' ? 0.34 : 0.23,
+      wind =
+        smoothRange(0, windEnd, progress) *
+        (1 - smoothRange(windEnd + 0.06, 0.52, progress)),
+      strike =
+        smoothRange(windEnd, 0.53, progress) *
+        (1 - smoothRange(0.66, 0.96, progress));
+    impact = Math.max(0, 1 - Math.abs(progress - 0.53) / 0.11);
+    if (world.attackKind === 'skill') {
+      const gather =
+          smoothRange(0, 0.35, progress) *
+          (1 - smoothRange(0.4, 0.58, progress)),
+        release =
+          smoothRange(0.36, 0.6, progress) *
+          (1 - smoothRange(0.78, 1, progress));
+      leftArm.position.x -= gather * 0.14;
+      rightArm.position.x += gather * 0.12;
+      leftArm.position.z -= release * 0.22;
+      rightArm.position.z -= release * 0.18;
+      rig.rotation.x -= gather * 0.05;
+    } else {
+      rightArm.position.x += wind * 0.18 - strike * 0.28;
+      rightArm.position.y += wind * 0.12 + strike * 0.08;
+      rightArm.position.z += wind * 0.13 - strike * 0.35;
+      rightArm.rotation.x += (-0.55 * wind + 0.86 * strike) * heavy;
+      rightArm.rotation.z += (-0.62 * wind + 0.74 * strike) * heavy;
+      weapon.rotation.z += (0.88 * wind - 1.25 * strike) * heavy;
+      weapon.rotation.x -= 0.35 * wind;
+      leftArm.position.z -= strike * 0.12;
+    }
+  }
+  if (world.dodgeTime > 0) {
+    const arc = Math.sin(clamp01(1 - world.dodgeTime / 0.48) * Math.PI);
+    rig.position.y -= arc * 0.15;
+    rig.rotation.z -= arc * 0.22;
+  }
+  const glow = spellGlow.material as THREE.MeshBasicMaterial;
+  glow.opacity =
+    world.attackKind === 'skill' && world.attackAnim > 0 ? 0.72 : impact * 0.35;
+  spellGlow.scale.setScalar(1 + Math.sin(elapsed * 8) * 0.08 + impact * 1.2);
+}
+
+function buildFieldBase(site: RenderBase, ghost = false) {
+  const root = new THREE.Group();
+  const ghostMaterial = new THREE.MeshStandardMaterial({
+    color: 0x69dcb2,
+    transparent: true,
+    opacity: 0.32,
+    roughness: 0.8,
+    depthWrite: false,
+  });
+  const stone = ghost ? ghostMaterial : mats.stoneDark;
+  const wood = ghost ? ghostMaterial : mats.wood;
+  const width = 2.8 + Math.min(site.level, 6) * 0.16;
+  mesh(
+    new RoundedBoxGeometry(width, 0.3, 2.5, 2, 0.06),
+    stone,
+    [1, 1, 1],
+    [0, 0.15, 0],
+    root,
+  );
+  for (const x of [-width / 2 + 0.18, width / 2 - 0.18])
+    mesh(geo.box, stone, [0.22, 1.7, 1.2], [x, 1.0, 0], root);
+  mesh(geo.box, stone, [0.95, 1.7, 0.18], [-0.92, 1.0, -1.15], root);
+  mesh(geo.box, stone, [0.95, 1.7, 0.18], [0.92, 1.0, -1.15], root);
+  mesh(geo.box, stone, [width / 2, 0.18, 1.25], [0, 1.92, 0], root);
+  for (const x of [-1.1, 1.1])
+    mesh(geo.cylinder, wood, [0.07, 1.1, 0.07], [x, 1.05, 1.05], root);
+  const banner = mesh(
+    geo.box,
+    ghost ? ghostMaterial : mats.cloth,
+    [0.45, 0.6, 0.025],
+    [0, 2.35, 0.05],
+    root,
+  );
+  banner.castShadow = !ghost;
+  root.position.set(worldX(site.x), 0, worldZ(site.y));
+  root.rotation.y = site.yaw;
+  root.userData.ghostMaterial = ghostMaterial;
   return root;
 }
 
@@ -1046,7 +1275,6 @@ function makeHammer(parent: THREE.Object3D) {
 
 function buildConstructionCrew(mobile: boolean) {
   const root = new THREE.Group();
-  root.position.set(worldX(430), 0, worldZ(275));
   for (const x of [-1.25, 1.25]) {
     mesh(geo.cylinder, mats.wood, [0.055, 1.4, 0.055], [x, 1.35, 0], root);
     mesh(geo.cylinder, mats.wood, [0.055, 1.4, 0.055], [x, 1.35, 1.05], root);
@@ -1111,6 +1339,7 @@ function buildConstructionCrew(mobile: boolean) {
   return root;
 }
 
+// oxlint-disable-next-line no-unused-vars -- paired with the retained third-person inspection rig
 function animatePlayerRig(
   player: THREE.Group,
   world: RenderWorld,
@@ -1519,7 +1748,7 @@ function seeded(n: number) {
 
 function addScatter(scene: THREE.Scene, region: RenderRegion, index: number) {
   const forest = region.biome === '森',
-    count = forest ? 34 : region.biome === '魔族集落' ? 16 : 24;
+    count = forest ? 120 : region.biome === '魔族集落' ? 42 : 68;
   if (forest) {
     const trunks = new THREE.InstancedMesh(geo.cylinder, mats.wood, count),
       tops = new THREE.InstancedMesh(geo.lowSphere, mats.foliage, count),
@@ -1531,7 +1760,7 @@ function addScatter(scene: THREE.Scene, region: RenderRegion, index: number) {
           region.y +
           50 +
           seeded(index * 137 + i + 30) * Math.max(1, region.h - 100),
-        s = 0.7 + seeded(i + index * 7) * 0.65;
+        s = 0.9 + seeded(i + index * 7) * 1.35;
       o.position.set(worldX(x), 0.55 * s, worldZ(y));
       o.scale.set(0.14 * s, 1.1 * s, 0.14 * s);
       o.updateMatrix();
@@ -1619,9 +1848,9 @@ function hut(parent: THREE.Object3D, x: number, z: number, cloth = mats.cloth) {
 function addLandmark(scene: THREE.Scene, region: RenderRegion, index: number) {
   const root = new THREE.Group();
   root.position.set(
-    worldX(region.x + region.w / 2),
+    worldX(region.x + region.w * 0.68),
     0.03,
-    worldZ(region.y + region.h / 2),
+    worldZ(region.y + region.h * 0.5),
   );
   scene.add(root);
   if (region.biome === '森') {
@@ -1725,6 +1954,21 @@ function addLandmark(scene: THREE.Scene, region: RenderRegion, index: number) {
       root,
     );
   pole.castShadow = flag.castShadow = true;
+  const landmarkScale =
+    region.biome === '火山'
+      ? 7
+      : region.biome === '城'
+        ? 5.4
+        : region.biome === '岩山'
+          ? 5
+          : region.biome === '砦'
+            ? 4.6
+            : region.biome === '洞窟'
+              ? 4.4
+              : region.biome === '荒野'
+                ? 4.1
+                : 3.4;
+  root.scale.setScalar(landmarkScale);
   root.userData = { regionId: region.id, flagMat, index };
   return root;
 }
@@ -1748,10 +1992,10 @@ export function createGame3D(
   renderer.shadowMap.type = THREE.PCFShadowMap;
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x100d19);
-  scene.fog = new THREE.FogExp2(0x171321, 0.027);
-  const camera = new THREE.PerspectiveCamera(mobile ? 58 : 51, 1, 0.08, 110),
-    cameraTarget = new THREE.Vector3();
-  camera.position.set(-12, 9, 13);
+  scene.fog = new THREE.FogExp2(0x171321, mobile ? 0.0082 : 0.0062);
+  const camera = new THREE.PerspectiveCamera(mobile ? 72 : 68, 1, 0.04, 340);
+  camera.rotation.order = 'YXZ';
+  scene.add(camera);
   scene.add(new THREE.HemisphereLight(0x8194c7, 0x241222, 1.65));
   const sun = new THREE.DirectionalLight(0xffd4a3, 3.1);
   sun.position.set(-8, 14, 7);
@@ -1851,13 +2095,34 @@ export function createGame3D(
     }),
   );
   scene.add(embers);
-  let player = buildRiggedPlayer(''),
+  let firstPersonRig = buildFirstPersonRig(''),
     playerJob = '';
-  scene.add(player);
+  camera.add(firstPersonRig);
   const constructionCrew = buildConstructionCrew(mobile);
   scene.add(constructionCrew);
   const mobs = new Map<number, THREE.Group>(),
-    nodes = new Map<number, THREE.Group>();
+    nodes = new Map<number, THREE.Group>(),
+    bases = new Map<number, THREE.Group>();
+  const buildGhost = buildFieldBase(
+    { id: -1, x: 0, y: 0, yaw: 0, level: 1 },
+    true,
+  );
+  buildGhost.visible = false;
+  scene.add(buildGhost);
+  const armyBody = new THREE.InstancedMesh(
+      geo.cylinder,
+      mats.ally,
+      mobile ? 24 : 48,
+    ),
+    armyHead = new THREE.InstancedMesh(
+      geo.lowSphere,
+      mats.skin,
+      mobile ? 24 : 48,
+    ),
+    armyDummy = new THREE.Object3D();
+  armyBody.castShadow = armyHead.castShadow = !mobile;
+  armyBody.frustumCulled = armyHead.frustumCulled = false;
+  scene.add(armyBody, armyHead);
   let elapsed = 0,
     lastX = Number.NaN,
     lastY = Number.NaN;
@@ -1877,9 +2142,9 @@ export function createGame3D(
     elapsed += dt;
     ensureSize();
     if (world.job !== playerJob) {
-      scene.remove(player);
-      player = buildRiggedPlayer(world.job);
-      scene.add(player);
+      camera.remove(firstPersonRig);
+      firstPersonRig = buildFirstPersonRig(world.job);
+      camera.add(firstPersonRig);
       playerJob = world.job;
       lastX = world.x;
       lastY = world.y;
@@ -1892,23 +2157,74 @@ export function createGame3D(
       playerSpeedScene = (playerDistance / Math.max(dt, 0.001)) * SCALE;
     lastX = world.x;
     lastY = world.y;
-    player.position.set(px, 0, pz);
-    const playerData = player.userData;
-    playerData.yaw = dampAngle(
-      playerData.yaw,
-      Math.atan2(world.facingX, world.facingY),
-      world.attackAnim > 0 ? 9 : 13,
-      dt,
-    );
-    player.rotation.y = playerData.yaw;
-    animatePlayerRig(player, world, dt, elapsed, playerSpeedScene);
+    animateFirstPersonRig(firstPersonRig, world, dt, elapsed, playerSpeedScene);
+    const locomotion = clamp01(playerSpeedScene / 3.8),
+      headBob =
+        Math.abs(Math.sin(elapsed * (5.2 + playerSpeedScene * 1.5))) *
+        0.025 *
+        locomotion;
+    camera.position.set(px, 1.68 + world.height + headBob, pz);
+    camera.rotation.set(world.viewPitch, Math.PI + world.viewYaw, 0);
+    let cameraRoll = Math.sin(elapsed * 5.4) * 0.0025 * locomotion,
+      cameraKick = 0;
+    if (world.attackAnim > 0 && world.attackTotal > 0) {
+      const progress = clamp01(1 - world.attackAnim / world.attackTotal);
+      cameraKick = Math.max(0, 1 - Math.abs(progress - 0.53) / 0.12);
+      cameraRoll +=
+        Math.sin(progress * Math.PI) *
+        (world.attackKind === 'heavy' ? 0.026 : 0.014);
+    }
+    if (world.hitAnim > 0) cameraRoll += Math.sin(elapsed * 36) * 0.018;
+    camera.rotation.x += cameraKick * 0.009;
+    camera.rotation.z = cameraRoll;
+    const sprintFov =
+      playerSpeedScene > 4.1 ? (mobile ? 78 : 75) : mobile ? 72 : 68;
+    camera.fov = THREE.MathUtils.damp(camera.fov, sprintFov, 7, dt);
+    camera.updateProjectionMatrix();
+    const buildSite = world.bases[world.bases.length - 1];
+    if (buildSite) {
+      constructionCrew.position.set(
+        worldX(buildSite.x),
+        0,
+        worldZ(buildSite.y),
+      );
+      constructionCrew.rotation.y = buildSite.yaw;
+    }
     animateConstruction(constructionCrew, world, elapsed);
+    const activeBases = new Set(world.bases.map((base) => base.id));
+    for (const [id, base] of bases)
+      if (!activeBases.has(id)) {
+        scene.remove(base);
+        bases.delete(id);
+      }
+    world.bases.forEach((site) => {
+      let base = bases.get(site.id);
+      if (!base) {
+        base = buildFieldBase(site);
+        bases.set(site.id, base);
+        scene.add(base);
+      }
+      base.position.set(worldX(site.x), 0, worldZ(site.y));
+      base.rotation.y = site.yaw;
+      base.visible = Math.hypot(site.x - world.x, site.y - world.y) < 4200;
+    });
+    buildGhost.visible = world.buildMode;
+    if (world.buildMode) {
+      buildGhost.position.set(
+        worldX(world.x + world.facingX * 320),
+        0.02,
+        worldZ(world.y + world.facingY * 320),
+      );
+      buildGhost.rotation.y = world.buildYaw;
+    }
     const activeIds = new Set(world.mobs.map((m) => m.id));
     for (const [id, obj] of mobs)
       if (!activeIds.has(id)) {
         scene.remove(obj);
         mobs.delete(id);
       }
+    let visibleAllies = 0;
+    const detailedAllyLimit = mobile ? 4 : 8;
     world.mobs.forEach((mob) => {
       let obj = mobs.get(mob.id);
       if (obj && obj.userData.ally !== !!mob.ally) {
@@ -1924,8 +2240,10 @@ export function createGame3D(
       const dx = mob.x - world.x,
         dy = mob.y - world.y,
         dist = Math.hypot(dx, dy);
-      obj.visible = dist < (mobile ? 720 : 980);
+      const allyAllowed = !mob.ally || visibleAllies < detailedAllyLimit;
+      obj.visible = dist < (mobile ? 1050 : 1650) && allyAllowed;
       if (!obj.visible) return;
+      if (mob.ally) visibleAllies++;
       const mobData = obj.userData;
       const previousX = mobData.prevX as number,
         previousY = mobData.prevY as number,
@@ -1956,6 +2274,34 @@ export function createGame3D(
         mob.ally ? 0x4de0b2 : mob.boss ? 0xff375f : 0xe95872,
       );
     });
+    const proxyCapacity = mobile ? 24 : 48,
+      proxyCount = Math.min(
+        proxyCapacity,
+        Math.max(0, world.minions - visibleAllies),
+      ),
+      forwardX = Math.sin(world.viewYaw),
+      forwardZ = Math.cos(world.viewYaw),
+      rightX = Math.cos(world.viewYaw),
+      rightZ = -Math.sin(world.viewYaw);
+    armyBody.count = armyHead.count = proxyCount;
+    for (let i = 0; i < proxyCount; i++) {
+      const row = Math.floor(i / 5),
+        column = (i % 5) - 2,
+        march = Math.sin(elapsed * 5.4 + i * 0.9) * 0.035,
+        ax = px - forwardX * (2.4 + row * 0.82) + rightX * column * 0.64,
+        az = pz - forwardZ * (2.4 + row * 0.82) + rightZ * column * 0.64;
+      armyDummy.position.set(ax, 0.72 + march, az);
+      armyDummy.rotation.set(0, world.viewYaw, 0);
+      armyDummy.scale.set(0.3, 0.72, 0.3);
+      armyDummy.updateMatrix();
+      armyBody.setMatrixAt(i, armyDummy.matrix);
+      armyDummy.position.y = 1.38 + march;
+      armyDummy.scale.set(0.24, 0.24, 0.24);
+      armyDummy.updateMatrix();
+      armyHead.setMatrixAt(i, armyDummy.matrix);
+    }
+    armyBody.instanceMatrix.needsUpdate = true;
+    armyHead.instanceMatrix.needsUpdate = true;
     const activeNodes = new Set(
       world.nodes.filter((n) => n.n > 0).map((n) => n.id),
     );
@@ -2013,20 +2359,14 @@ export function createGame3D(
         Math.hypot(mob.x - world.x, mob.y - world.y) < 180
       );
     });
-    const shakeStrength =
-      (world.hitAnim > 0 ? 0.09 : 0) + (bossImpact ? 0.075 : 0);
-    const desired = new THREE.Vector3(
-        px + 6.8 + Math.sin(elapsed * 57) * shakeStrength,
-        (mobile ? 7.3 : 6.4) + Math.cos(elapsed * 63) * shakeStrength,
-        pz + 8.2 + Math.sin(elapsed * 49) * shakeStrength,
-      ),
-      blend = 1 - Math.pow(0.002, dt);
-    camera.position.lerp(desired, blend);
-    cameraTarget.lerp(new THREE.Vector3(px, 1.08, pz), blend);
-    camera.lookAt(cameraTarget);
+    if (bossImpact) {
+      camera.position.x += Math.sin(elapsed * 53) * 0.025;
+      camera.position.y += Math.cos(elapsed * 47) * 0.018;
+    }
     sun.position.set(px - 8, 14, pz + 7);
     sun.target.position.set(px, 0, pz);
     sun.target.updateMatrixWorld();
+    embers.position.set(px, 0, pz);
     embers.rotation.y = elapsed * 0.015;
     renderer.render(scene, camera);
   };
