@@ -23,9 +23,19 @@ import {
   Wind,
   Zap,
 } from 'lucide-react';
-import { createGame3D } from './game3d';
+import { createDemonPreview, createGame3D } from './game3d';
 
 type Owner = 'unknown' | 'wild' | 'enemy' | 'own';
+type MonsterKind =
+  | 'imp'
+  | 'beast'
+  | 'insect'
+  | 'golem'
+  | 'flying'
+  | 'plant'
+  | 'slime'
+  | 'armored'
+  | 'aberration';
 type Region = {
   id: string;
   name: string;
@@ -48,6 +58,8 @@ type Mob = {
   tier: number;
   boss?: boolean;
   ally?: boolean;
+  kind?: MonsterKind;
+  variant?: number;
   home: string;
   attackAnim?: number;
   attackTotal?: number;
@@ -220,6 +232,16 @@ type World = {
   cd: number;
 };
 const RANKS = ['F', 'E', 'D', 'C', 'B', 'A', 'S', '魔王'];
+const RANK_APPEARANCE = [
+  '小さな双角と異質な紫肌。粗末な装備でも確かに魔族だ。',
+  '角と鉤爪が伸び、立ち姿に自信が宿り始める。',
+  '瞳と皮膚紋様に固有の紫魔力が流れ始める。',
+  '発達した角と手甲を備え、強者の輪郭が完成する。',
+  '硬質な装甲と肩角が育ち、上位魔族の威圧を放つ。',
+  '翼状の背部器官と長大な角で、遠目にも格を示す。',
+  '黒角・魔力紋・装備が調和した最高位の魔族。',
+  '始まりの双角と紫の瞳が、魔王の威厳ある最終形へ至る。',
+];
 const STAT_INFO: { id: StatKey; name: string; desc: string }[] = [
   { id: 'life', name: '生命', desc: '最大HP +12' },
   { id: 'strength', name: '力', desc: '物理攻撃力 +3' },
@@ -755,32 +777,194 @@ const ownerOf = (w: World, r: Region): Owner =>
 const jobOf = (w: World) => JOBS.find((j) => j.id === w.job) || JOBS[0];
 const d = (a: { x: number; y: number }, b: { x: number; y: number }) =>
   Math.hypot(a.x - b.x, a.y - b.y);
-const MOB_NAMES: Record<string, string[]> = {
-  廃墟: ['はぐれインプ', '灰角インプ', '瓦礫スライム'],
-  森: ['魔樹ゴブリン', '毒牙ウルフ', '樹海オーガ'],
-  岩山: ['岩鎧オーガ', '白骨騎士', '崖飛びガーゴイル'],
-  砦: ['黒曜兵', '城塞斧兵', '黒曜守備隊長'],
-  塔: ['塔の魔術兵', '灰翼ガーゴイル', '封印番兵'],
-  荒野: ['砂塵ハウンド', '荒野の略奪者', '赤錆巨人'],
-  魔族集落: ['槍持ち魔族', '集落の番人', '魔獣使い'],
-  洞窟: ['洞窟スライム', '深淵グール', '暗岩獣'],
-  火山: ['火炎サラマンダー', '溶岩オーガ', '火口の巨人'],
-  城: ['魔城ガーゴイル', '封印の騎士', '城壁巨兵'],
+const MONSTER_BEHAVIOR: Record<
+  MonsterKind,
+  {
+    speed: number;
+    reach: number;
+    detect: number;
+    attack: number;
+    cooldown: number;
+    wander: number;
+  }
+> = {
+  imp: {
+    speed: 76,
+    reach: 42,
+    detect: 230,
+    attack: 0.64,
+    cooldown: 0.92,
+    wander: 18,
+  },
+  beast: {
+    speed: 92,
+    reach: 55,
+    detect: 310,
+    attack: 0.76,
+    cooldown: 1.08,
+    wander: 22,
+  },
+  insect: {
+    speed: 84,
+    reach: 48,
+    detect: 275,
+    attack: 0.68,
+    cooldown: 0.88,
+    wander: 26,
+  },
+  golem: {
+    speed: 31,
+    reach: 74,
+    detect: 245,
+    attack: 1.34,
+    cooldown: 1.9,
+    wander: 5,
+  },
+  flying: {
+    speed: 78,
+    reach: 68,
+    detect: 340,
+    attack: 0.92,
+    cooldown: 1.3,
+    wander: 20,
+  },
+  plant: {
+    speed: 10,
+    reach: 128,
+    detect: 260,
+    attack: 1.18,
+    cooldown: 1.65,
+    wander: 0,
+  },
+  slime: {
+    speed: 38,
+    reach: 44,
+    detect: 195,
+    attack: 0.9,
+    cooldown: 1.35,
+    wander: 7,
+  },
+  armored: {
+    speed: 34,
+    reach: 72,
+    detect: 250,
+    attack: 1.2,
+    cooldown: 1.72,
+    wander: 6,
+  },
+  aberration: {
+    speed: 48,
+    reach: 138,
+    detect: 360,
+    attack: 1.28,
+    cooldown: 1.58,
+    wander: 11,
+  },
+};
+const behaviorOf = (mob: Mob) => MONSTER_BEHAVIOR[mob.kind || 'imp'];
+type MonsterSpecies = { name: string; kind: MonsterKind };
+const MONSTER_ECOLOGY: Record<string, MonsterSpecies[]> = {
+  廃墟: [
+    { name: '瓦礫喰いスライム', kind: 'slime' },
+    { name: '片翼の灰インプ', kind: 'imp' },
+    { name: '墓石甲虫', kind: 'insect' },
+    { name: '漂う怨眼', kind: 'aberration' },
+  ],
+  森: [
+    { name: '毒牙ムーンウルフ', kind: 'beast' },
+    { name: '根歩きマンドラゴラ', kind: 'plant' },
+    { name: '鎌羽モス', kind: 'flying' },
+    { name: '樹液鎧カブト', kind: 'insect' },
+  ],
+  岩山: [
+    { name: '断崖ストーンゴーレム', kind: 'golem' },
+    { name: '骸骨山ヤギ魔獣', kind: 'beast' },
+    { name: '裂岩ワーム', kind: 'insect' },
+    { name: '白翼ガーゴイル', kind: 'flying' },
+  ],
+  砦: [
+    { name: '黒曜殻センチネル', kind: 'armored' },
+    { name: '城壁喰いゴーレム', kind: 'golem' },
+    { name: '鉄顎ハウンド', kind: 'beast' },
+    { name: '鎖脚スカラベ', kind: 'insect' },
+  ],
+  塔: [
+    { name: '灰翼ヴォイドレイ', kind: 'flying' },
+    { name: '多眼の魔力核', kind: 'aberration' },
+    { name: '封印液スライム', kind: 'slime' },
+    { name: '塔守りルーンゴーレム', kind: 'golem' },
+  ],
+  荒野: [
+    { name: '砂走り六脚獣', kind: 'beast' },
+    { name: '赤錆甲殻ワーム', kind: 'insect' },
+    { name: '巨顎デザートハウンド', kind: 'beast' },
+    { name: '風葬いハゲタカ魔', kind: 'flying' },
+  ],
+  魔族集落: [
+    { name: '家畜喰い小鬼', kind: 'imp' },
+    { name: '角笛鎧の番獣', kind: 'armored' },
+    { name: '屋根這い羽虫', kind: 'flying' },
+    { name: '魔力排水スライム', kind: 'slime' },
+  ],
+  洞窟: [
+    { name: '天井這い大蝙蝠', kind: 'flying' },
+    { name: '紫晶ゴーレム', kind: 'golem' },
+    { name: '地底百足', kind: 'insect' },
+    { name: '深淵粘体', kind: 'slime' },
+  ],
+  火山: [
+    { name: '溶岩サラマンダー', kind: 'beast' },
+    { name: '火口殻ゴーレム', kind: 'golem' },
+    { name: '爆炎羽トカゲ', kind: 'flying' },
+    { name: '煮え血スライム', kind: 'slime' },
+  ],
+  城: [
+    { name: '魔城の重殻騎獣', kind: 'armored' },
+    { name: '王眼キメラ', kind: 'aberration' },
+    { name: '断頭翼ガーゴイル', kind: 'flying' },
+    { name: '城壁融合ゴーレム', kind: 'golem' },
+  ],
+};
+const TERRITORY_LORDS: Record<string, MonsterSpecies> = {
+  forest: { name: '千年喰いの歩行魔樹', kind: 'plant' },
+  mountain: { name: '連峰を背負う骸晶巨像', kind: 'golem' },
+  citadel: { name: '黒曜百腕城塞獣', kind: 'armored' },
+  ashland: { name: '灰冠の六翼魔眼', kind: 'aberration' },
+  waste: { name: '赤砂を泳ぐ大顎王', kind: 'beast' },
+  village: { name: '角笛都市の鎧殻女王', kind: 'insect' },
+  cave: { name: '深淵天蓋の晶翼蝙蝠', kind: 'flying' },
+  volcano: { name: '火山核を抱く溶岩巨神', kind: 'golem' },
+  castle: { name: '封印王城の混成魔獣', kind: 'aberration' },
 };
 const spawn = (): Mob[] =>
   REGIONS.flatMap((region, regionIndex) =>
-    Array.from({ length: 7 }, (_, i) => {
+    Array.from({ length: 10 }, (_, i) => {
       const tier = Math.min(
         6,
         1 + Math.floor(regionIndex / 2) + (i % 3 === 2 ? 1 : 0),
       );
-      const names = MOB_NAMES[region.biome] || MOB_NAMES['廃墟'];
-      const hp = 30 + tier * 22;
+      const species = (MONSTER_ECOLOGY[region.biome] ||
+          MONSTER_ECOLOGY['廃墟'])[i % 4],
+        speciesIndex = i % 4,
+        packIndex = Math.floor(i / 4),
+        packAngle = packIndex * 2.35 + speciesIndex * 0.4,
+        packRadius = 80 + packIndex * 58,
+        hp = 30 + tier * 22;
       return {
-        id: regionIndex * 10 + i + 1,
-        x: region.x + 420 + ((i * 739 + regionIndex * 311) % (region.w - 840)),
-        y: region.y + 520 + ((i * 947 + regionIndex * 457) % (region.h - 1040)),
-        name: names[i % names.length],
+        id: regionIndex * 20 + i + 1,
+        x:
+          region.x +
+          690 +
+          (speciesIndex % 2) * 1780 +
+          Math.cos(packAngle) * packRadius,
+        y:
+          region.y +
+          980 +
+          Math.floor(speciesIndex / 2) * 2320 +
+          Math.sin(packAngle) * packRadius,
+        name: species.name,
+        kind: species.kind,
+        variant: (regionIndex * 3 + i) % 5,
         tier,
         hp,
         max: hp,
@@ -934,6 +1118,7 @@ const applyCareer = (w: World, id: string, c: Career) => {
 
 export default function Home() {
   const canvas = useRef<HTMLCanvasElement>(null),
+    rankCanvas = useRef<HTMLCanvasElement>(null),
     game = useRef(fresh()),
     keys = useRef<Record<string, boolean>>({}),
     stick = useRef({ x: 0, y: 0, on: false }),
@@ -946,6 +1131,7 @@ export default function Home() {
     [growthOpen, setGrowthOpen] = useState(false),
     [transferOpen, setTransferOpen] = useState(false),
     [controlsOpen, setControlsOpen] = useState(false),
+    [rankEvolution, setRankEvolution] = useState<number | null>(null),
     [bindings, setBindings] = useState({ ...DEFAULT_BINDINGS }),
     [listening, setListening] = useState<BindingAction | null>(null);
   const sync = useCallback(
@@ -1341,13 +1527,19 @@ export default function Home() {
     let required = Math.max(2, REGIONS.indexOf(r) - 1);
     if (w.lv < required)
       return say('この領土の瘴気は強すぎる。推奨Lv.' + required + '。');
+    const lord = TERRITORY_LORDS[r.id] || {
+      name: r.name + 'の異形領主',
+      kind: 'aberration' as MonsterKind,
+    };
     w.mobs.push({
-      id: 100 + w.bossKills,
+      id: 10000 + w.bossKills,
       x: headquarters.x,
       y: headquarters.y,
       hp: 150 + required * 35,
       max: 150 + required * 35,
-      name: r.name + 'の支配者',
+      name: lord.name,
+      kind: lord.kind,
+      variant: 4,
       tier: required,
       boss: true,
       home: r.id,
@@ -1365,6 +1557,7 @@ export default function Home() {
     w.maxHp += 25;
     w.hp = w.maxHp;
     w.achievements++;
+    setRankEvolution(w.rank);
     w.message =
       w.rank === 7
         ? '魔王戴冠！ レベルだけでは届かない覇道を成し遂げた。'
@@ -1620,40 +1813,72 @@ export default function Home() {
           m.deathAnim = Math.max(0, (m.deathAnim || 0) - dt);
           return;
         }
-        let q = d(w, m),
-          target: Mob | undefined,
-          reach = m.boss ? 62 : 48;
+        const behavior = behaviorOf(m),
+          q = d(w, m) || 1,
+          reach = behavior.reach * (m.boss ? 2.35 : 1),
+          detect = behavior.detect * (m.boss ? 1.55 : 1);
+        let target: Mob | undefined;
         if (m.ally) {
           target = w.mobs
             .filter((x) => !x.ally && !x.dead)
             .sort((a, b) => d(m, a) - d(m, b))[0];
-          let tq = target ? d(m, target) : 999;
-          if (target && tq < 190) {
+          const tq = target ? d(m, target) || 1 : 999;
+          if (target && tq < detect) {
             if (tq > reach && !(m.attackAnim || 0)) {
-              m.x +=
-                ((target.x - m.x) / tq) * (88 + w.stats.leadership * 2) * dt;
-              m.y +=
-                ((target.y - m.y) / tq) * (88 + w.stats.leadership * 2) * dt;
+              const allySpeed =
+                Math.max(38, behavior.speed) + w.stats.leadership * 2;
+              m.x += ((target.x - m.x) / tq) * allySpeed * dt;
+              m.y += ((target.y - m.y) / tq) * allySpeed * dt;
             } else if (tq <= reach && (m.attackCd || 0) <= 0) {
-              m.attackTotal = 0.72;
+              m.attackTotal = behavior.attack;
               m.attackAnim = m.attackTotal;
-              m.attackCd = 1.15;
+              m.attackCd = behavior.cooldown;
               m.attackHit = false;
               m.attackTarget = target.id;
             }
           } else if (q > 80 && !(m.attackAnim || 0)) {
-            m.x += ((w.x - m.x) / q) * (80 + w.stats.leadership * 2) * dt;
-            m.y += ((w.y - m.y) / q) * (80 + w.stats.leadership * 2) * dt;
+            const followSpeed =
+              Math.max(54, behavior.speed) + w.stats.leadership * 2;
+            m.x += ((w.x - m.x) / q) * followSpeed * dt;
+            m.y += ((w.y - m.y) / q) * followSpeed * dt;
           }
         } else {
-          if (q < 220 && q > reach && !(m.attackAnim || 0)) {
-            m.x += ((w.x - m.x) / q) * (m.boss ? 44 : 55) * dt;
-            m.y += ((w.y - m.y) / q) * (m.boss ? 44 : 55) * dt;
+          if (q < detect && q > reach && !(m.attackAnim || 0)) {
+            const chaseSpeed = behavior.speed * (m.boss ? 0.78 : 1),
+              strafe =
+                m.kind === 'insect' || m.kind === 'flying'
+                  ? Math.sin(now * 0.005 + m.id) * chaseSpeed * 0.28
+                  : 0;
+            m.x +=
+              (((w.x - m.x) / q) * chaseSpeed + ((w.y - m.y) / q) * strafe) *
+              dt;
+            m.y +=
+              (((w.y - m.y) / q) * chaseSpeed - ((w.x - m.x) / q) * strafe) *
+              dt;
           } else if (q <= reach && (m.attackCd || 0) <= 0) {
-            m.attackTotal = m.boss ? 1.18 : 0.78;
+            m.attackTotal = behavior.attack * (m.boss ? 1.18 : 1);
             m.attackAnim = m.attackTotal;
-            m.attackCd = m.boss ? 1.75 : 1.2;
+            m.attackCd = behavior.cooldown * (m.boss ? 1.12 : 1);
             m.attackHit = false;
+          } else if (
+            q >= detect &&
+            behavior.wander > 0 &&
+            !(m.attackAnim || 0)
+          ) {
+            const home = REGIONS.find((region) => region.id === m.home),
+              angle = now * 0.00022 * (1 + behavior.wander / 20) + m.id * 1.71;
+            m.x += Math.cos(angle) * behavior.wander * dt;
+            m.y += Math.sin(angle * 0.83) * behavior.wander * dt;
+            if (home) {
+              m.x = Math.max(
+                home.x + 120,
+                Math.min(home.x + home.w - 120, m.x),
+              );
+              m.y = Math.max(
+                home.y + 120,
+                Math.min(home.y + home.h - 120, m.y),
+              );
+            }
           }
         }
         if ((m.attackAnim || 0) > 0) {
@@ -1719,6 +1944,16 @@ export default function Home() {
       view.dispose();
     };
   }, [sync]);
+  useEffect(() => {
+    if (!rankOpen || !rankCanvas.current || !hud.job) return;
+    const preview = createDemonPreview(rankCanvas.current, hud.job, hud.rank);
+    return () => preview.dispose();
+  }, [rankOpen, hud.job, hud.rank]);
+  useEffect(() => {
+    if (rankEvolution === null) return;
+    const timeout = setTimeout(() => setRankEvolution(null), 2600);
+    return () => clearTimeout(timeout);
+  }, [rankEvolution]);
   const current = regionAt(hud.x, hud.y),
     currentOwner = ownerOf(hud, current),
     need = hud.lv * 34,
@@ -1998,13 +2233,32 @@ export default function Home() {
           </div>
         )}
         {rankOpen && (
-          <div className="rank-panel">
+          <div
+            className={
+              'rank-panel ' + (rankEvolution !== null ? 'evolving' : '')
+            }
+          >
             <div className="panel-head">
               <div>
                 <Shield size={18} />
                 <b>魔族ランク</b>
               </div>
               <button onClick={() => setRankOpen(false)}>×</button>
+            </div>
+            <div className="rank-showcase">
+              <canvas
+                ref={rankCanvas}
+                aria-label={`${RANKS[hud.rank]}ランク主人公の全身3D表示`}
+              />
+              <div>
+                <span>DEMON EVOLUTION</span>
+                <b>RANK {RANKS[hud.rank]}</b>
+                <p>{RANK_APPEARANCE[hud.rank]}</p>
+                <small>ドラッグして全身を回転</small>
+              </div>
+              {rankEvolution !== null && (
+                <strong>魔族進化 — {RANKS[rankEvolution]}</strong>
+              )}
             </div>
             <div className="rank-track">
               {RANKS.map((r, i) => (
@@ -2030,7 +2284,7 @@ export default function Home() {
               <span>領土 {hud.lands}</span>
               <span>配下 {hud.minions}</span>
               <span>拠点 Lv.{hud.base}</span>
-              <span>地域 {hud.discovered.length}/9</span>
+              <span>地域 {hud.discovered.length}/10</span>
             </div>
             <button
               className={'rank-up ' + (ready ? 'ready' : '')}

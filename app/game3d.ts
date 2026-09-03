@@ -13,6 +13,16 @@ export type RenderRegion = {
   owner: 'unknown' | 'wild' | 'enemy' | 'own';
   landmark: string;
 };
+type MonsterKind =
+  | 'imp'
+  | 'beast'
+  | 'insect'
+  | 'golem'
+  | 'flying'
+  | 'plant'
+  | 'slime'
+  | 'armored'
+  | 'aberration';
 type RenderMob = {
   id: number;
   x: number;
@@ -23,6 +33,8 @@ type RenderMob = {
   tier: number;
   boss?: boolean;
   ally?: boolean;
+  kind?: MonsterKind;
+  variant?: number;
   home: string;
   attackAnim?: number;
   attackTotal?: number;
@@ -53,6 +65,7 @@ export type RenderWorld = {
   hp: number;
   maxHp: number;
   job: string;
+  rank: number;
   guarding: boolean;
   dodgeTime: number;
   attackAnim: number;
@@ -699,8 +712,7 @@ function createJointLimb(
   return { upper, lower, end, side };
 }
 
-// oxlint-disable-next-line no-unused-vars -- retained for a future optional third-person inspection mode
-function buildRiggedPlayer(job: string) {
+function buildRiggedPlayer(job: string, rank = 0) {
   const root = new THREE.Group();
   addShadow(root, 0.58);
   const motion = new THREE.Group();
@@ -720,9 +732,39 @@ function buildRiggedPlayer(job: string) {
     dragoon: 0xad8c35,
   };
   const color = jobColors[job] || 0x5d3b79;
-  const cloth = new THREE.MeshStandardMaterial({ color, roughness: 0.9 });
+  const rankRatio = rank / 7,
+    skinColor = new THREE.Color(0x9564a5).lerp(
+      new THREE.Color(0x4c315f),
+      rankRatio,
+    ),
+    demonSkin = new THREE.MeshStandardMaterial({
+      color: skinColor,
+      roughness: 0.68 - rankRatio * 0.16,
+      metalness: rank >= 6 ? 0.08 : 0.01,
+    }),
+    hornMaterial = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(0x34313b).lerp(
+        new THREE.Color(0x130f19),
+        rankRatio,
+      ),
+      roughness: 0.34,
+      metalness: 0.24 + rankRatio * 0.18,
+    }),
+    bodyGlow = new THREE.MeshStandardMaterial({
+      color: 0xb876ff,
+      emissive: 0x6922c7,
+      emissiveIntensity: 1.2 + rank * 0.55,
+      roughness: 0.25,
+    }),
+    cloth = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(color).lerp(
+        new THREE.Color(0x17131f),
+        rankRatio * 0.38,
+      ),
+      roughness: 0.9 - rankRatio * 0.16,
+    });
   const armor =
-    job === 'mage' || job === 'ruler' || job === 'shadow'
+    rank < 3 || job === 'mage' || job === 'ruler' || job === 'shadow'
       ? mats.leather
       : mats.iron;
   const legs = [
@@ -739,13 +781,15 @@ function buildRiggedPlayer(job: string) {
     [0, 0.43, 0],
     torso,
   );
-  mesh(
-    new RoundedBoxGeometry(0.67, 0.5, 0.12, 2, 0.04),
-    armor,
-    [1, 1, 1],
-    [0, 0.49, 0.27],
-    torso,
-  );
+  if (rank > 0)
+    mesh(
+      new RoundedBoxGeometry(0.67, 0.5, 0.12 + rank * 0.006, 2, 0.04),
+      armor,
+      [1, 1, 1],
+      [0, 0.49, 0.27],
+      torso,
+    );
+  else mesh(geo.box, mats.leather, [0.48, 0.24, 0.07], [0, 0.43, 0.25], torso);
   mesh(geo.box, mats.leather, [0.41, 0.07, 0.27], [0, 0.02, 0], torso);
   mesh(
     geo.cylinder,
@@ -758,12 +802,35 @@ function buildRiggedPlayer(job: string) {
     createJointLimb(torso, [-0.5, 0.72, 0], 0.4, 0.36, 0.105, cloth, -1),
     createJointLimb(torso, [0.5, 0.72, 0], 0.4, 0.36, 0.105, cloth, 1),
   ];
-  for (const arm of arms)
-    mesh(geo.sphere, armor, [0.2, 0.16, 0.23], [0, 0, 0], arm.upper);
+  for (const arm of arms) {
+    if (rank >= 2)
+      mesh(
+        geo.sphere,
+        rank >= 5 ? mats.silver : armor,
+        [0.18 + rank * 0.008, 0.14 + rank * 0.006, 0.21],
+        [0, 0, 0],
+        arm.upper,
+      );
+    arm.end.traverse((part) => {
+      if (part instanceof THREE.Mesh && part.material === mats.skin)
+        part.material = demonSkin;
+    });
+    if (rank >= 1)
+      for (let claw = -1; claw <= 1; claw++) {
+        const talon = mesh(
+          geo.cone,
+          hornMaterial,
+          [0.018, 0.11 + rank * 0.008, 0.018],
+          [claw * 0.035, -0.09, 0.035],
+          arm.end,
+        );
+        talon.rotation.x = Math.PI / 2.8;
+      }
+  }
   const head = new THREE.Group();
   head.position.y = 1.05;
   torso.add(head);
-  mesh(geo.sphere, mats.skin, [0.3, 0.34, 0.29], [0, 0, 0.02], head);
+  mesh(geo.sphere, demonSkin, [0.3, 0.34, 0.29], [0, 0, 0.02], head);
   mesh(
     new THREE.SphereGeometry(1, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.58),
     cloth,
@@ -771,16 +838,82 @@ function buildRiggedPlayer(job: string) {
     [0, 0.13, -0.01],
     head,
   );
+  for (let lock = -2; lock <= 2; lock++) {
+    const hairLock = mesh(
+      geo.cone,
+      cloth,
+      [0.045 + (2 - Math.abs(lock)) * 0.008, 0.24 + rank * 0.012, 0.045],
+      [lock * 0.09, 0.18, -0.25],
+      head,
+    );
+    hairLock.rotation.x = -0.18;
+    hairLock.rotation.z = lock * 0.055;
+  }
   addEyes(head, 0.02, 0.285, 0.105, 0.045);
+  if (rank >= 2)
+    for (const side of [-1, 1])
+      mesh(
+        new THREE.TorusGeometry(0.052, 0.009, 6, 16),
+        bodyGlow,
+        [1, 1, 1],
+        [side * 0.105, 0.02, 0.286],
+        head,
+        false,
+      );
   for (const side of [-1, 1]) {
     const horn = mesh(
       geo.cone,
-      mats.iron,
-      [0.09, 0.36, 0.09],
-      [side * 0.23, 0.39, 0],
+      hornMaterial,
+      [0.075 + rank * 0.008, 0.24 + rank * 0.065, 0.075 + rank * 0.008],
+      [side * (0.21 + rank * 0.006), 0.38, -0.01],
       head,
     );
-    horn.rotation.z = side * -0.34;
+    horn.rotation.z = side * (-0.27 - rank * 0.045);
+    horn.rotation.x = -rank * 0.035;
+    if (rank >= 3) {
+      const crownBranch = mesh(
+        geo.cone,
+        hornMaterial,
+        [0.045 + rank * 0.004, 0.2 + rank * 0.035, 0.045 + rank * 0.004],
+        [side * (0.29 + rank * 0.018), 0.5 + rank * 0.035, -0.08],
+        head,
+      );
+      crownBranch.rotation.z = side * (-0.72 - rank * 0.025);
+      crownBranch.rotation.x = -0.2;
+    }
+    if (rank === 7) {
+      const finalBranch = mesh(
+        geo.cone,
+        hornMaterial,
+        [0.052, 0.32, 0.052],
+        [side * 0.36, 0.62, -0.11],
+        head,
+      );
+      finalBranch.rotation.z = side * -1.08;
+      finalBranch.rotation.x = -0.32;
+    }
+  }
+  if (rank >= 2) {
+    for (const side of [-1, 1]) {
+      const cheekMark = mesh(
+        geo.box,
+        bodyGlow,
+        [0.012, 0.12 + rank * 0.008, 0.012],
+        [side * 0.2, -0.02, 0.286],
+        head,
+        false,
+      );
+      cheekMark.rotation.z = side * 0.32;
+    }
+    for (const side of [-1, 1])
+      mesh(
+        geo.box,
+        bodyGlow,
+        [0.016, 0.22 + rank * 0.015, 0.012],
+        [side * 0.22, 0.38, 0.337],
+        torso,
+        false,
+      ).rotation.z = side * -0.22;
   }
   const cape = mesh(
     new RoundedBoxGeometry(0.62, 0.84, 0.045, 2, 0.02),
@@ -790,6 +923,57 @@ function buildRiggedPlayer(job: string) {
     torso,
   );
   cape.rotation.x = -0.08;
+  if (rank >= 4) {
+    const tail = mesh(
+      geo.cone,
+      demonSkin,
+      [0.085 + rank * 0.006, 0.85 + rank * 0.06, 0.085 + rank * 0.006],
+      [0, 0.08, -0.33],
+      pelvis,
+    );
+    tail.rotation.x = -1.12;
+    tail.rotation.z = 0.18;
+    mesh(
+      geo.octa,
+      hornMaterial,
+      [0.12, 0.2, 0.08],
+      [0, -0.62, -0.98],
+      pelvis,
+    ).rotation.x = 0.28;
+    for (const side of [-1, 1]) {
+      const mantle = mesh(
+        geo.cone,
+        rank >= 6 ? hornMaterial : armor,
+        [0.09 + rank * 0.008, 0.45 + rank * 0.05, 0.09 + rank * 0.008],
+        [side * 0.58, 0.74, -0.02],
+        torso,
+      );
+      mantle.rotation.z = side * -0.92;
+    }
+    mesh(
+      geo.octa,
+      bodyGlow,
+      [0.1 + rank * 0.006, 0.13 + rank * 0.008, 0.055],
+      [0, 0.5, 0.35],
+      torso,
+    );
+  }
+  if (rank >= 5) {
+    for (const side of [-1, 1]) {
+      const wing = new THREE.Group();
+      wing.position.set(side * 0.32, 0.63, -0.22);
+      torso.add(wing);
+      const wingBlade = mesh(
+        new THREE.ConeGeometry(1, 1, 3),
+        rank >= 6 ? hornMaterial : cloth,
+        [0.72 + rank * 0.07, 0.045, 0.58 + rank * 0.05],
+        [side * 0.55, 0.05, -0.22],
+        wing,
+      );
+      wingBlade.rotation.z = (side * -Math.PI) / 2;
+      wingBlade.rotation.x = -0.35;
+    }
+  }
   const weapon = buildWeapon(job, color);
   weapon.position.set(0, -0.04, 0.02);
   weapon.rotation.z = -0.24;
@@ -822,7 +1006,10 @@ function buildRiggedPlayer(job: string) {
     false,
   );
   aura.rotation.x = -Math.PI / 2;
-  aura.visible = false;
+  aura.visible = rank >= 2;
+  (aura.material as THREE.MeshBasicMaterial).opacity =
+    rank >= 2 ? 0.1 + rank * 0.035 : 0;
+  aura.scale.setScalar(1 + rank * 0.12);
   root.userData = {
     motion,
     pelvis,
@@ -834,6 +1021,8 @@ function buildRiggedPlayer(job: string) {
     shield,
     aura,
     cape,
+    rank,
+    bodyGlow,
     gait: 0,
     speedBlend: 0,
     guardBlend: 0,
@@ -844,7 +1033,7 @@ function buildRiggedPlayer(job: string) {
   return root;
 }
 
-function buildFirstPersonRig(job: string) {
+function buildFirstPersonRig(job: string, rank = 0) {
   const root = new THREE.Group();
   const jobColors: Record<string, number> = {
     blade: 0x8454c4,
@@ -857,16 +1046,34 @@ function buildFirstPersonRig(job: string) {
     nightseer: 0x5376cd,
     dragoon: 0xad8c35,
   };
-  const color = jobColors[job] || 0x5d3b79;
+  const color = jobColors[job] || 0x5d3b79,
+    rankRatio = rank / 7;
   const sleeve = new THREE.MeshStandardMaterial({
-    color,
-    roughness: 0.88,
+    color: new THREE.Color(color).lerp(
+      new THREE.Color(0x18131f),
+      rankRatio * 0.42,
+    ),
+    roughness: 0.88 - rankRatio * 0.18,
     depthTest: false,
     depthWrite: false,
   });
   const skin = new THREE.MeshStandardMaterial({
-    color: 0x9564a5,
-    roughness: 0.7,
+    color: new THREE.Color(0x9564a5).lerp(new THREE.Color(0x4c315f), rankRatio),
+    roughness: 0.7 - rankRatio * 0.17,
+    depthTest: false,
+    depthWrite: false,
+  });
+  const demonHard = new THREE.MeshStandardMaterial({
+    color: rank >= 5 ? 0x17141d : 0x38313e,
+    roughness: 0.31,
+    metalness: 0.36 + rankRatio * 0.24,
+    depthTest: false,
+    depthWrite: false,
+  });
+  const runeMaterial = new THREE.MeshBasicMaterial({
+    color: rank >= 6 ? 0xd8adff : 0xa866ee,
+    transparent: true,
+    opacity: rank >= 2 ? 0.34 + rankRatio * 0.46 : 0,
     depthTest: false,
     depthWrite: false,
   });
@@ -882,7 +1089,65 @@ function buildFirstPersonRig(job: string) {
       false,
     );
     forearm.rotation.x = -0.92;
-    mesh(geo.sphere, skin, [0.095, 0.095, 0.11], [0, 0.25, -0.25], arm, false);
+    const hand = mesh(
+      geo.sphere,
+      skin,
+      [0.095, 0.095, 0.11],
+      [0, 0.25, -0.25],
+      arm,
+      false,
+    );
+    hand.renderOrder = 20;
+    if (rank >= 1)
+      for (let claw = -1; claw <= 1; claw++) {
+        const talon = mesh(
+          geo.cone,
+          demonHard,
+          [0.014 + rank * 0.0015, 0.1 + rank * 0.008, 0.014 + rank * 0.0015],
+          [claw * 0.033, 0.31, -0.33],
+          arm,
+          false,
+        );
+        talon.rotation.x = Math.PI / 2.55;
+        talon.renderOrder = 21;
+      }
+    if (rank >= 2) {
+      const rune = mesh(
+        geo.box,
+        runeMaterial,
+        [0.015, 0.19 + rank * 0.012, 0.01],
+        [side * 0.054, 0.04, -0.265],
+        arm,
+        false,
+      );
+      rune.rotation.x = -0.92;
+      rune.rotation.z = side * -0.22;
+      rune.renderOrder = 22;
+    }
+    if (rank >= 3) {
+      const bracer = mesh(
+        new THREE.CylinderGeometry(0.105, 0.088, 0.28, 8, 1, true),
+        rank >= 5 ? demonHard : sleeve,
+        [1, 1, 1],
+        [0, -0.02, -0.02],
+        arm,
+        false,
+      );
+      bracer.rotation.x = -0.92;
+      bracer.renderOrder = 21;
+      if (rank >= 5) {
+        const spike = mesh(
+          geo.cone,
+          demonHard,
+          [0.035, 0.2, 0.035],
+          [side * 0.08, -0.02, -0.02],
+          arm,
+          false,
+        );
+        spike.rotation.z = side * -1.05;
+        spike.renderOrder = 22;
+      }
+    }
     root.add(arm);
     return arm;
   };
@@ -898,6 +1163,16 @@ function buildFirstPersonRig(job: string) {
     const material = child.material as THREE.MeshStandardMaterial;
     material.depthTest = false;
     material.depthWrite = false;
+    material.metalness = Math.min(
+      1,
+      (material.metalness || 0) + rankRatio * 0.22,
+    );
+    if (rank >= 4) {
+      material.emissive = new THREE.Color(color).multiplyScalar(
+        0.16 + rankRatio * 0.12,
+      );
+      material.emissiveIntensity = 0.5 + rankRatio;
+    }
     child.renderOrder = 20;
   });
   rightArm.add(weapon);
@@ -918,11 +1193,28 @@ function buildFirstPersonRig(job: string) {
     false,
   );
   spellGlow.renderOrder = 21;
+  const rankAura = new THREE.Group();
+  rankAura.position.set(0, -0.17, -0.7);
+  root.add(rankAura);
+  if (rank >= 4)
+    for (let i = 0; i < Math.min(3, rank - 3); i++) {
+      const ring = mesh(
+        new THREE.RingGeometry(0.18 + i * 0.08, 0.19 + i * 0.08, 28),
+        runeMaterial,
+        [1, 1, 1],
+        [0, i * -0.035, i * -0.045],
+        rankAura,
+        false,
+      );
+      ring.renderOrder = 22;
+    }
   root.userData = {
     leftArm,
     rightArm,
     weapon,
     spellGlow,
+    rankAura,
+    rank,
     gait: 0,
     speedBlend: 0,
     guardBlend: 0,
@@ -942,7 +1234,9 @@ function animateFirstPersonRig(
   const leftArm = data.leftArm as THREE.Group,
     rightArm = data.rightArm as THREE.Group,
     weapon = data.weapon as THREE.Group,
-    spellGlow = data.spellGlow as THREE.Mesh;
+    spellGlow = data.spellGlow as THREE.Mesh,
+    rankAura = data.rankAura as THREE.Group,
+    rank = data.rank as number;
   data.speedBlend = THREE.MathUtils.damp(
     data.speedBlend,
     clamp01(speedScene / 3.9),
@@ -1013,9 +1307,17 @@ function animateFirstPersonRig(
     rig.rotation.z -= arc * 0.22;
   }
   const glow = spellGlow.material as THREE.MeshBasicMaterial;
+  const passiveGlow = rank >= 2 ? Math.min(0.28, 0.025 * rank) : 0;
   glow.opacity =
-    world.attackKind === 'skill' && world.attackAnim > 0 ? 0.72 : impact * 0.35;
+    world.attackKind === 'skill' && world.attackAnim > 0
+      ? 0.72
+      : passiveGlow + impact * 0.35;
   spellGlow.scale.setScalar(1 + Math.sin(elapsed * 8) * 0.08 + impact * 1.2);
+  rankAura.rotation.z = elapsed * (0.12 + rank * 0.025);
+  rankAura.children.forEach((ring, index) => {
+    ring.rotation.z = elapsed * (index % 2 ? -0.5 : 0.45) + index;
+    ring.scale.setScalar(1 + Math.sin(elapsed * 2.4 + index) * 0.05);
+  });
 }
 
 function buildFieldBase(site: RenderBase, ghost = false) {
@@ -1060,21 +1362,98 @@ function buildFieldBase(site: RenderBase, ghost = false) {
 
 function buildRiggedMob(mob: RenderMob) {
   const root = new THREE.Group();
-  addShadow(root, mob.boss ? 0.82 : 0.46);
+  const kind: MonsterKind =
+      mob.kind ||
+      (/スライム|粘体/.test(mob.name)
+        ? 'slime'
+        : /ウルフ|ハウンド|サラマンダー|獣/.test(mob.name)
+          ? 'beast'
+          : 'imp'),
+    variant = mob.variant ?? mob.id % 5,
+    tierScale = [0.58, 0.68, 0.82, 1.03, 1.3, 1.62, 1.95][
+      Math.max(0, Math.min(6, mob.tier))
+    ],
+    kindScale: Record<MonsterKind, number> = {
+      imp: 0.82,
+      beast: 1,
+      insect: 0.92,
+      golem: 1.34,
+      flying: 1.02,
+      plant: 1.18,
+      slime: 0.86,
+      armored: 1.28,
+      aberration: 1.08,
+    },
+    scale = mob.boss
+      ? (2.75 + Math.min(mob.tier, 8) * 0.1) * kindScale[kind]
+      : tierScale * kindScale[kind],
+    shapeScale = new THREE.Vector3(
+      0.93 + (variant % 3) * 0.07,
+      0.96 + ((variant + 2) % 3) * 0.055,
+      0.94 + ((variant + 1) % 3) * 0.06,
+    ),
+    palette: Record<string, number[]> = {
+      ruins: [0x6f536e, 0x765344, 0x455061],
+      forest: [0x315e3c, 0x5a5531, 0x234e45],
+      mountain: [0x777580, 0x544d5d, 0x6b6f62],
+      citadel: [0x383c4c, 0x4f2934, 0x222632],
+      ashland: [0x4e4269, 0x343750, 0x684650],
+      waste: [0x87523b, 0x6d4630, 0x775c42],
+      village: [0x70445e, 0x554063, 0x68434b],
+      cave: [0x34465c, 0x3e5360, 0x50426b],
+      volcano: [0x732d25, 0x4f2926, 0x8b3d22],
+      castle: [0x3b294f, 0x292e43, 0x4a263c],
+    },
+    bodyColor = (palette[mob.home] || palette.ruins)[variant % 3],
+    baseMat = mob.ally
+      ? mats.ally
+      : new THREE.MeshStandardMaterial({
+          color: bodyColor,
+          roughness:
+            kind === 'insect' || kind === 'armored' || kind === 'golem'
+              ? 0.38
+              : 0.76,
+          metalness: kind === 'armored' ? 0.65 : kind === 'golem' ? 0.15 : 0,
+        }),
+    accentMat = mob.ally
+      ? mats.gold
+      : new THREE.MeshStandardMaterial({
+          color: new THREE.Color(bodyColor).offsetHSL(
+            variant % 2 ? 0.08 : -0.07,
+            0.08,
+            variant % 3 === 0 ? 0.18 : -0.12,
+          ),
+          roughness: kind === 'insect' ? 0.3 : 0.7,
+          metalness: kind === 'insect' ? 0.28 : 0.04,
+        }),
+    glowColor =
+      mob.home === 'volcano'
+        ? 0xff4a16
+        : mob.home === 'forest'
+          ? 0x70e079
+          : 0xaf75ff,
+    glowMat = new THREE.MeshStandardMaterial({
+      color: glowColor,
+      emissive: glowColor,
+      emissiveIntensity: mob.boss ? 4.2 : 2.2,
+      roughness: 0.22,
+    });
+  addShadow(root, (mob.boss ? 1.6 : 0.46) * Math.max(0.72, scale));
   const motion = new THREE.Group();
   root.add(motion);
-  const baseMat = mob.ally ? mats.ally : mats.enemy;
-  const scale = mob.boss ? 1.35 : 1 + Math.min(mob.tier, 6) * 0.045;
-  let kind: 'humanoid' | 'quadruped' | 'slime' = 'humanoid';
   let torso: THREE.Group | undefined,
     head: THREE.Group | undefined,
     pelvis: THREE.Group | undefined,
     legs: JointLimb[] = [],
     arms: JointLimb[] = [],
     tail: THREE.Object3D | undefined,
-    slimeBody: THREE.Mesh | undefined;
-  if (/ウルフ|ハウンド|サラマンダー/.test(mob.name)) {
-    kind = 'quadruped';
+    slimeBody: THREE.Mesh | undefined,
+    core: THREE.Mesh | undefined;
+  const wings: THREE.Group[] = [],
+    tentacles: THREE.Object3D[] = [],
+    extras: THREE.Object3D[] = [];
+  let flightHeight = 0;
+  if (kind === 'beast') {
     torso = new THREE.Group();
     torso.position.y = 0.66;
     motion.add(torso);
@@ -1111,18 +1490,280 @@ function buildRiggedMob(mob: RenderMob) {
       );
       ear.rotation.z = side * 0.18;
     }
-  } else if (/スライム/.test(mob.name)) {
-    kind = 'slime';
+    for (let i = 0; i < 1 + (variant % 3); i++) {
+      const spine = mesh(
+        geo.cone,
+        variant === 4 ? glowMat : accentMat,
+        [0.07, 0.24 + i * 0.04, 0.07],
+        [0, 0.34, 0.25 - i * 0.35],
+        torso,
+      );
+      spine.rotation.x = -0.18;
+      extras.push(spine);
+    }
+  } else if (kind === 'insect') {
+    torso = new THREE.Group();
+    torso.position.y = 0.56;
+    motion.add(torso);
+    mesh(geo.lowSphere, baseMat, [0.42, 0.31, 0.65], [0, 0, -0.28], torso);
+    mesh(geo.lowSphere, accentMat, [0.38, 0.34, 0.4], [0, 0.02, 0.26], torso);
+    head = new THREE.Group();
+    head.position.set(0, 0.03, 0.62);
+    torso.add(head);
+    mesh(geo.lowSphere, baseMat, [0.3, 0.27, 0.3], [0, 0, 0], head);
+    addEyes(head, 0.04, 0.28, 0.14, 0.055);
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < 3; i++) {
+        const leg = createJointLimb(
+          torso,
+          [side * 0.27, -0.06, 0.34 - i * 0.36],
+          0.38 + i * 0.04,
+          0.32,
+          0.045,
+          accentMat,
+          side,
+          true,
+        );
+        leg.upper.rotation.z = side * (0.86 + i * 0.1);
+        leg.lower.rotation.z = side * -0.52;
+        leg.upper.userData.restZ = leg.upper.rotation.z;
+        leg.lower.userData.restZ = leg.lower.rotation.z;
+        legs.push(leg);
+      }
+      const mandible = mesh(
+        geo.cone,
+        variant === 4 ? glowMat : mats.iron,
+        [0.065, 0.34, 0.065],
+        [side * 0.17, -0.06, 0.28],
+        head,
+      );
+      mandible.rotation.x = 1.16;
+      mandible.rotation.z = side * 0.25;
+      extras.push(mandible);
+    }
+    for (let i = 0; i < 1 + (variant % 3); i++)
+      mesh(
+        geo.sphere,
+        variant >= 3 ? glowMat : accentMat,
+        [0.06, 0.025, 0.09],
+        [0, 0.31, -0.46 + i * 0.29],
+        torso,
+      );
+  } else if (kind === 'golem') {
+    pelvis = new THREE.Group();
+    pelvis.position.y = 0.92;
+    motion.add(pelvis);
+    mesh(geo.rock, accentMat, [0.48, 0.32, 0.4], [0, 0, 0], pelvis);
+    legs = [-1, 1].map((side) =>
+      createJointLimb(
+        pelvis!,
+        [side * 0.34, -0.08, 0],
+        0.54,
+        0.48,
+        0.19,
+        baseMat,
+        side,
+        true,
+      ),
+    );
+    torso = new THREE.Group();
+    pelvis.add(torso);
+    mesh(geo.rock, baseMat, [0.82, 0.72, 0.52], [0, 0.62, 0], torso);
+    mesh(geo.rock, accentMat, [0.53, 0.34, 0.58], [0, 0.71, 0.12], torso);
+    arms = [-1, 1].map((side) =>
+      createJointLimb(
+        torso!,
+        [side * 0.78, 0.72, 0],
+        0.58,
+        0.52,
+        0.22,
+        accentMat,
+        side,
+      ),
+    );
+    head = new THREE.Group();
+    head.position.set(0, 1.38, 0.08);
+    torso.add(head);
+    mesh(geo.rock, baseMat, [0.37, 0.32, 0.34], [0, 0, 0], head);
+    core = mesh(geo.octa, glowMat, [0.16, 0.2, 0.1], [0, 0.7, 0.53], torso);
+    addEyes(head, 0, 0.34, 0, 0.07);
+    for (let i = 0; i < variant; i++) {
+      const spike = mesh(
+        geo.cone,
+        variant === 4 ? glowMat : mats.stoneLight,
+        [0.1, 0.42, 0.1],
+        [(i % 2 ? 1 : -1) * (0.25 + i * 0.08), 1.25, -0.18],
+        torso,
+      );
+      spike.rotation.z = (i % 2 ? -1 : 1) * 0.45;
+    }
+  } else if (kind === 'flying') {
+    flightHeight = mob.boss ? 1.7 : 1.15;
+    torso = new THREE.Group();
+    torso.position.y = 0.72;
+    motion.add(torso);
+    mesh(geo.lowSphere, baseMat, [0.46, 0.34, 0.7], [0, 0, 0], torso);
+    head = new THREE.Group();
+    head.position.set(0, 0.05, 0.67);
+    torso.add(head);
+    mesh(geo.lowSphere, accentMat, [0.32, 0.28, 0.36], [0, 0, 0], head);
+    addEyes(head, 0.04, 0.33, 0.13, 0.055);
+    tail = mesh(geo.cone, baseMat, [0.13, 0.8, 0.13], [0, 0, -0.65], torso);
+    tail.rotation.x = -Math.PI / 2;
+    for (const side of [-1, 1]) {
+      const wing = new THREE.Group();
+      wing.position.set(side * 0.36, 0.11, -0.05);
+      torso.add(wing);
+      const sail = mesh(
+        new THREE.ConeGeometry(1, 1, 3),
+        variant === 4 ? glowMat : baseMat,
+        [0.9 + variant * 0.08, 0.06, 0.72],
+        [side * 0.65, 0, -0.08],
+        wing,
+      );
+      sail.rotation.z = (side * -Math.PI) / 2;
+      sail.rotation.y = side * 0.22;
+      mesh(
+        geo.cylinder,
+        accentMat,
+        [0.035, 0.9, 0.035],
+        [side * 0.44, 0, 0],
+        wing,
+      ).rotation.z = (side * Math.PI) / 2;
+      wings.push(wing);
+    }
+    for (let i = 0; i < 1 + (variant % 2); i++) {
+      const horn = mesh(
+        geo.cone,
+        accentMat,
+        [0.07, 0.3, 0.07],
+        [(i ? 1 : -1) * 0.16, 0.25, -0.04],
+        head,
+      );
+      horn.rotation.z = (i ? -1 : 1) * 0.35;
+    }
+  } else if (kind === 'plant') {
+    torso = new THREE.Group();
+    torso.position.y = 0.78;
+    motion.add(torso);
+    mesh(geo.cylinder, mats.wood, [0.3, 0.95, 0.3], [0, 0.18, 0], torso);
+    mesh(geo.lowSphere, baseMat, [0.55, 0.52, 0.48], [0, 0.78, 0], torso);
+    head = new THREE.Group();
+    head.position.set(0, 1.25, 0.08);
+    torso.add(head);
+    mesh(geo.lowSphere, accentMat, [0.39, 0.34, 0.4], [0, 0, 0], head);
+    addEyes(head, 0.02, 0.4, 0.12, 0.055);
+    for (let i = 0; i < 6; i++) {
+      const angle = (i / 6) * Math.PI * 2;
+      const petal = mesh(
+        geo.cone,
+        baseMat,
+        [0.16, 0.48, 0.12],
+        [Math.sin(angle) * 0.33, Math.cos(angle) * 0.3, -0.08],
+        head,
+      );
+      petal.rotation.z = -angle;
+      petal.userData.baseScale = petal.scale.clone();
+      extras.push(petal);
+    }
+    arms = [-1, 1].map((side) =>
+      createJointLimb(
+        torso!,
+        [side * 0.38, 0.7, 0],
+        0.58,
+        0.54,
+        0.075,
+        mats.wood,
+        side,
+      ),
+    );
+    for (let i = 0; i < 4 + (variant % 3); i++) {
+      const angle = (i / (4 + (variant % 3))) * Math.PI * 2;
+      const rootLeg = mesh(
+        geo.cone,
+        mats.wood,
+        [0.09, 0.72, 0.09],
+        [Math.sin(angle) * 0.34, -0.52, Math.cos(angle) * 0.34],
+        torso,
+      );
+      rootLeg.rotation.z = Math.sin(angle) * 0.55;
+      rootLeg.rotation.x = Math.cos(angle) * 0.55;
+      tentacles.push(rootLeg);
+    }
+    core = mesh(geo.sphere, glowMat, [0.1, 0.1, 0.08], [0, 0.8, 0.47], torso);
+  } else if (kind === 'aberration') {
+    flightHeight = mob.boss ? 1.35 : 0.75;
+    torso = new THREE.Group();
+    torso.position.y = 1.08;
+    motion.add(torso);
+    mesh(geo.lowSphere, baseMat, [0.66, 0.64, 0.58], [0, 0, 0], torso);
+    core = mesh(geo.sphere, glowMat, [0.29, 0.29, 0.12], [0, 0, 0.55], torso);
+    for (let i = 0; i < 3 + (variant % 3); i++) {
+      const angle = (i / (3 + (variant % 3))) * Math.PI * 2;
+      const eye = mesh(
+        geo.sphere,
+        mats.eye,
+        [0.075, 0.075, 0.045],
+        [Math.sin(angle) * 0.48, Math.cos(angle) * 0.42, 0.37],
+        torso,
+      );
+      extras.push(eye);
+    }
+    const ring = mesh(
+      new THREE.TorusGeometry(0.84, 0.045, 6, 24),
+      accentMat,
+      [1, 1, 1],
+      [0, 0, 0],
+      torso,
+    );
+    ring.rotation.x = Math.PI / 2.8;
+    extras.push(ring);
+    for (let i = 0; i < 5 + (variant % 3); i++) {
+      const angle = (i / (5 + (variant % 3))) * Math.PI * 2;
+      const tendril = mesh(
+        geo.cone,
+        baseMat,
+        [0.08, 0.75 + (i % 2) * 0.25, 0.08],
+        [Math.sin(angle) * 0.38, -0.64, Math.cos(angle) * 0.38],
+        torso,
+      );
+      tendril.rotation.z = Math.sin(angle) * 0.35;
+      tendril.rotation.x = Math.cos(angle) * 0.35;
+      tentacles.push(tendril);
+    }
+  } else if (kind === 'slime') {
     slimeBody = mesh(
       new THREE.SphereGeometry(1, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.78),
       baseMat,
-      [0.62, 0.52, 0.62],
+      [
+        0.62 + variant * 0.035,
+        0.52 + (variant % 2) * 0.08,
+        0.62 - variant * 0.018,
+      ],
       [0, 0.12, 0],
       motion,
     );
+    slimeBody.userData.baseScale = slimeBody.scale.clone();
     addEyes(motion, 0.48, 0.54, 0.16, 0.055);
+    core = mesh(
+      geo.octa,
+      glowMat,
+      [0.13, 0.16, 0.1],
+      [variant % 2 ? 0.18 : -0.18, 0.25, 0.18],
+      motion,
+    );
+    for (let i = 0; i < variant; i++) {
+      const bubble = mesh(
+        geo.sphere,
+        accentMat,
+        [0.09, 0.09, 0.09],
+        [-0.3 + i * 0.17, 0.42 + (i % 2) * 0.08, -0.12],
+        motion,
+      );
+      extras.push(bubble);
+    }
   } else {
-    const large = mob.tier >= 3 || mob.boss;
+    const large = kind === 'armored';
     pelvis = new THREE.Group();
     pelvis.position.y = large ? 1.0 : 0.76;
     motion.add(pelvis);
@@ -1168,7 +1809,7 @@ function buildRiggedMob(mob: RenderMob) {
     if (large)
       mesh(
         new RoundedBoxGeometry(0.75, 0.42, 0.1, 2, 0.04),
-        mats.iron,
+        accentMat,
         [1, 1, 1],
         [0, 0.5, 0.29],
         torso,
@@ -1196,7 +1837,7 @@ function buildRiggedMob(mob: RenderMob) {
     ];
     if (large)
       for (const arm of arms)
-        mesh(geo.sphere, mats.iron, [0.24, 0.18, 0.26], [0, 0, 0], arm.upper);
+        mesh(geo.sphere, accentMat, [0.24, 0.18, 0.26], [0, 0, 0], arm.upper);
     head = new THREE.Group();
     head.position.y = large ? 1.04 : 0.82;
     torso.add(head);
@@ -1214,15 +1855,59 @@ function buildRiggedMob(mob: RenderMob) {
       large ? 0.12 : 0.09,
       large ? 0.05 : 0.04,
     );
-    for (const side of [-1, 1]) {
+    const hornSides = variant === 0 && !large ? [-1] : [-1, 1];
+    for (const side of hornSides) {
       const horn = mesh(
         geo.cone,
-        mats.iron,
-        [large ? 0.11 : 0.08, large ? 0.38 : 0.28, large ? 0.11 : 0.08],
-        [side * (large ? 0.27 : 0.21), large ? 0.34 : 0.28, 0],
+        variant === 4 ? glowMat : accentMat,
+        [
+          large ? 0.13 : 0.07 + variant * 0.012,
+          large ? 0.48 : 0.22 + variant * 0.06,
+          large ? 0.13 : 0.07 + variant * 0.012,
+        ],
+        [side * (large ? 0.3 : 0.21), large ? 0.38 : 0.28, 0],
         head,
       );
       horn.rotation.z = side * -0.42;
+    }
+    if (large) {
+      const shield = mesh(
+        new THREE.CylinderGeometry(0.5, 0.42, 0.14, 8),
+        accentMat,
+        [1, 1, 1],
+        [0, 0.04, 0.08],
+        arms[0].end,
+      );
+      shield.rotation.x = Math.PI / 2;
+      for (let i = 0; i < 2 + (variant % 3); i++) {
+        const shoulderSpike = mesh(
+          geo.cone,
+          variant === 4 ? glowMat : mats.iron,
+          [0.08, 0.35 + i * 0.04, 0.08],
+          [(i % 2 ? 1 : -1) * 0.65, 0.82 + i * 0.08, 0],
+          torso,
+        );
+        shoulderSpike.rotation.z = (i % 2 ? -1 : 1) * 0.68;
+      }
+    } else {
+      for (const side of [-1, 1]) {
+        const ear = mesh(
+          geo.cone,
+          accentMat,
+          [0.09, 0.34 + (variant % 2) * 0.11, 0.05],
+          [side * 0.29, 0.04, 0],
+          head,
+        );
+        ear.rotation.z = side * Math.PI * 0.44;
+      }
+      tail = mesh(
+        geo.cone,
+        baseMat,
+        [0.07, 0.58, 0.07],
+        [0, 0.2, -0.35],
+        torso,
+      );
+      tail.rotation.x = -1.1;
     }
     if (mob.boss) {
       mesh(
@@ -1237,10 +1922,47 @@ function buildRiggedMob(mob: RenderMob) {
       arms[1].end.add(blade);
     }
   }
-  motion.scale.setScalar(scale);
+  let bossAura: THREE.Group | undefined;
+  if (mob.boss || mob.tier >= 5) {
+    bossAura = new THREE.Group();
+    bossAura.position.y = 1.25 * scale;
+    root.add(bossAura);
+    const shardCount = mob.boss ? 8 : 4,
+      auraRadius = mob.boss ? 1.15 : 0.78;
+    for (let i = 0; i < shardCount; i++) {
+      const angle = (i / shardCount) * Math.PI * 2;
+      mesh(
+        geo.octa,
+        glowMat,
+        [0.07 * scale, (mob.boss ? 0.22 : 0.14) * scale, 0.07 * scale],
+        [
+          Math.sin(angle) * auraRadius * scale,
+          Math.sin(i * 2.1) * 0.22 * scale,
+          Math.cos(angle) * auraRadius * scale,
+        ],
+        bossAura,
+      );
+    }
+  }
+  if (core) core.userData.baseScale = core.scale.clone();
+  motion.scale.set(
+    scale * shapeScale.x,
+    scale * shapeScale.y,
+    scale * shapeScale.z,
+  );
   const bar = buildHealthBar(!!mob.boss);
-  bar.position.y =
-    (mob.boss ? 3.25 : kind === 'quadruped' ? 1.85 : 2.55) * scale;
+  const heightByKind: Record<MonsterKind, number> = {
+    imp: 2.05,
+    beast: 1.55,
+    insect: 1.42,
+    golem: 2.72,
+    flying: 3.18,
+    plant: 2.8,
+    slime: 1.2,
+    armored: 2.82,
+    aberration: 2.75,
+  };
+  bar.position.y = heightByKind[kind] * scale;
   root.add(bar);
   root.userData = {
     kind,
@@ -1252,9 +1974,17 @@ function buildRiggedMob(mob: RenderMob) {
     arms,
     tail,
     slimeBody,
+    core,
+    wings,
+    tentacles,
+    extras,
+    flightHeight,
+    bossAura,
+    variant,
     bar,
     ally: !!mob.ally,
     baseScale: scale,
+    shapeScale,
     gait: mob.id * 0.71,
     speedBlend: 0,
     yaw: 0,
@@ -1532,8 +2262,26 @@ function animateMobRig(
   const phase = data.gait as number;
   motion.position.set(0, 0, 0);
   motion.rotation.set(0, 0, 0);
-  motion.scale.setScalar(data.baseScale as number);
-  if (data.kind === 'humanoid') {
+  const baseScale = data.baseScale as number,
+    shapeScale = data.shapeScale as THREE.Vector3;
+  motion.scale.set(
+    baseScale * shapeScale.x,
+    baseScale * shapeScale.y,
+    baseScale * shapeScale.z,
+  );
+  const bossAura = data.bossAura as THREE.Group | undefined,
+    core = data.core as THREE.Mesh | undefined;
+  if (bossAura) {
+    bossAura.rotation.y = elapsed * 0.48;
+    bossAura.rotation.x = Math.sin(elapsed * 0.42) * 0.12;
+  }
+  if (core) {
+    const baseCoreScale = core.userData.baseScale as THREE.Vector3;
+    core.scale
+      .copy(baseCoreScale)
+      .multiplyScalar(1 + Math.sin(elapsed * 5.5 + mob.id) * 0.12);
+  }
+  if (data.kind === 'imp' || data.kind === 'armored') {
     const pelvis = data.pelvis as THREE.Group,
       torso = data.torso as THREE.Group,
       head = data.head as THREE.Group,
@@ -1592,7 +2340,7 @@ function animateMobRig(
       arms[0].upper.rotation.x += -0.28 * wind + 0.4 * strike;
       legs[0].lower.rotation.x += wind * 0.45;
     }
-  } else if (data.kind === 'quadruped') {
+  } else if (data.kind === 'beast') {
     const torso = data.torso as THREE.Group,
       head = data.head as THREE.Group,
       legs = data.legs as JointLimb[],
@@ -1628,14 +2376,210 @@ function animateMobRig(
       head.rotation.x += leap * 0.48;
       legs.forEach((leg) => (leg.lower.rotation.x += crouch * 0.62));
     }
+  } else if (data.kind === 'insect') {
+    const torso = data.torso as THREE.Group,
+      head = data.head as THREE.Group,
+      legs = data.legs as JointLimb[],
+      extras = data.extras as THREE.Object3D[];
+    torso.position.y =
+      0.56 + Math.abs(Math.sin(phase * 3)) * 0.025 * locomotion;
+    torso.rotation.set(
+      Math.sin(phase * 2) * 0.025 * locomotion,
+      0,
+      Math.sin(phase * 3) * 0.055 * locomotion,
+    );
+    legs.forEach((leg, index) => {
+      const wave = Math.sin(
+          phase * 1.45 + (index % 3) * 1.9 + (index > 2 ? Math.PI : 0),
+        ),
+        restUpper = leg.upper.userData.restZ as number,
+        restLower = leg.lower.userData.restZ as number;
+      leg.upper.rotation.x = wave * 0.52 * locomotion;
+      leg.upper.rotation.z = restUpper + wave * 0.12 * locomotion;
+      leg.lower.rotation.x = -wave * 0.46 * locomotion;
+      leg.lower.rotation.z = restLower;
+    });
+    head.rotation.set(
+      Math.sin(elapsed * 2.3 + mob.id) * 0.035,
+      Math.sin(elapsed * 1.1 + mob.id) * 0.2 * (1 - locomotion),
+      0,
+    );
+    extras.slice(0, 2).forEach((mandible, index) => {
+      mandible.rotation.z += Math.sin(elapsed * 5 + index * Math.PI) * 0.08;
+    });
+    if ((mob.attackAnim || 0) > 0) {
+      const progress = clamp01(
+          1 - (mob.attackAnim || 0) / (mob.attackTotal || 0.68),
+        ),
+        snap = Math.sin(smoothRange(0.22, 0.62, progress) * Math.PI),
+        lunge =
+          smoothRange(0.28, 0.53, progress) *
+          (1 - smoothRange(0.64, 0.94, progress));
+      motion.position.z += lunge * 0.48;
+      torso.rotation.x -= snap * 0.24;
+      extras.slice(0, 2).forEach((mandible, index) => {
+        mandible.rotation.z += (index ? -1 : 1) * snap * 0.48;
+      });
+    }
+  } else if (data.kind === 'golem') {
+    const pelvis = data.pelvis as THREE.Group,
+      torso = data.torso as THREE.Group,
+      head = data.head as THREE.Group,
+      legs = data.legs as JointLimb[],
+      arms = data.arms as JointLimb[];
+    data.pelvisBase ??= pelvis.position.y;
+    const weightStep = Math.sin(phase * 0.72),
+      lifted = Math.abs(Math.sin(phase * 0.72));
+    pelvis.position.set(0, data.pelvisBase + lifted * 0.045 * locomotion, 0);
+    pelvis.rotation.set(0, weightStep * 0.045 * locomotion, 0);
+    torso.rotation.set(0, 0, -weightStep * 0.035 * locomotion);
+    legs.forEach((leg, index) => {
+      const wave = Math.sin(phase * 0.72 + index * Math.PI);
+      leg.upper.rotation.x = wave * 0.31 * locomotion;
+      leg.lower.rotation.x = Math.max(0, -wave) * 0.34 * locomotion;
+    });
+    arms.forEach((arm, index) => {
+      const wave = Math.sin(phase * 0.72 + index * Math.PI);
+      arm.upper.rotation.set(-wave * 0.18 * locomotion, 0, arm.side * 0.16);
+      arm.lower.rotation.x = -0.18;
+    });
+    head.rotation.y =
+      Math.sin(elapsed * 0.34 + mob.id) * 0.13 * (1 - locomotion);
+    if ((mob.attackAnim || 0) > 0) {
+      const progress = clamp01(
+          1 - (mob.attackAnim || 0) / (mob.attackTotal || 1.34),
+        ),
+        raise =
+          smoothRange(0, 0.38, progress) *
+          (1 - smoothRange(0.42, 0.55, progress)),
+        slam =
+          smoothRange(0.38, 0.58, progress) *
+          (1 - smoothRange(0.72, 0.98, progress));
+      pelvis.position.y -= slam * 0.16;
+      torso.rotation.x = raise * -0.18 + slam * 0.32;
+      arms.forEach((arm, index) => {
+        arm.upper.rotation.x = -raise * 1.75 + slam * 1.25;
+        arm.upper.rotation.z = (index ? 1 : -1) * (0.35 - raise * 0.2);
+        arm.lower.rotation.x = -raise * 0.65 + slam * 0.28;
+      });
+      motion.position.z += slam * 0.24;
+    }
+  } else if (data.kind === 'flying') {
+    const torso = data.torso as THREE.Group,
+      head = data.head as THREE.Group,
+      wings = data.wings as THREE.Group[],
+      tail = data.tail as THREE.Object3D,
+      baseScale = data.baseScale as number,
+      flightHeight = data.flightHeight as number;
+    const flap = Math.sin(elapsed * (locomotion > 0.15 ? 10.5 : 5.8) + mob.id),
+      hover = Math.sin(elapsed * 2.1 + mob.id) * 0.1;
+    motion.position.y = flightHeight * Math.max(0.75, baseScale * 0.68) + hover;
+    torso.rotation.set(
+      -0.12 * locomotion,
+      0,
+      Math.sin(phase) * 0.04 * locomotion,
+    );
+    wings.forEach((wing, index) => {
+      wing.rotation.z = (index ? -1 : 1) * (0.22 + flap * 0.58);
+      wing.rotation.y = (index ? 1 : -1) * 0.12 * locomotion;
+    });
+    head.rotation.x = 0.12 * locomotion - hover * 0.12;
+    head.rotation.y =
+      Math.sin(elapsed * 0.9 + mob.id) * 0.12 * (1 - locomotion);
+    tail.rotation.z = Math.sin(elapsed * 3.4 + mob.id) * 0.3;
+    if ((mob.attackAnim || 0) > 0) {
+      const progress = clamp01(
+          1 - (mob.attackAnim || 0) / (mob.attackTotal || 0.92),
+        ),
+        dive =
+          smoothRange(0.18, 0.55, progress) *
+          (1 - smoothRange(0.68, 0.96, progress));
+      motion.position.y -= dive * (0.75 + baseScale * 0.18);
+      motion.position.z += dive * 0.62;
+      torso.rotation.x += dive * 0.72;
+      wings.forEach(
+        (wing, index) => (wing.rotation.z = (index ? -1 : 1) * 0.12),
+      );
+    }
+  } else if (data.kind === 'plant') {
+    const torso = data.torso as THREE.Group,
+      head = data.head as THREE.Group,
+      arms = data.arms as JointLimb[],
+      roots = data.tentacles as THREE.Object3D[],
+      extras = data.extras as THREE.Object3D[];
+    const sway = Math.sin(elapsed * 1.1 + mob.id) * 0.055;
+    torso.position.y = 0.78;
+    torso.rotation.set(sway * 0.45, sway, sway * 0.8);
+    head.rotation.y = Math.sin(elapsed * 0.63 + mob.id) * 0.16;
+    arms.forEach((arm, index) => {
+      arm.upper.rotation.set(
+        -0.35 + Math.sin(elapsed * 1.4 + index * 2.2 + mob.id) * 0.18,
+        0,
+        arm.side * 0.72,
+      );
+      arm.lower.rotation.x = -0.46 + Math.sin(elapsed * 1.8 + index) * 0.13;
+    });
+    roots.forEach((root, index) => {
+      root.rotation.y = Math.sin(elapsed * 1.7 + index) * 0.14;
+    });
+    extras.forEach((petal, index) => {
+      const basePetalScale = petal.userData.baseScale as THREE.Vector3;
+      petal.scale.copy(basePetalScale);
+      petal.scale.y *= 1 + Math.sin(elapsed * 2 + index) * 0.06;
+    });
+    if ((mob.attackAnim || 0) > 0) {
+      const progress = clamp01(
+          1 - (mob.attackAnim || 0) / (mob.attackTotal || 1.18),
+        ),
+        lash = Math.sin(smoothRange(0.16, 0.68, progress) * Math.PI);
+      torso.rotation.x -= lash * 0.38;
+      motion.position.z += lash * 0.3;
+      arms.forEach((arm) => {
+        arm.upper.rotation.x -= lash * 0.92;
+        arm.lower.rotation.x += lash * 0.75;
+      });
+      head.rotation.x += lash * 0.34;
+    }
+  } else if (data.kind === 'aberration') {
+    const torso = data.torso as THREE.Group,
+      tentacles = data.tentacles as THREE.Object3D[],
+      extras = data.extras as THREE.Object3D[],
+      baseScale = data.baseScale as number,
+      flightHeight = data.flightHeight as number;
+    motion.position.y =
+      flightHeight * Math.max(0.82, baseScale * 0.5) +
+      Math.sin(elapsed * 1.65 + mob.id) * 0.13;
+    torso.rotation.y = elapsed * 0.18 + mob.id;
+    torso.rotation.z = Math.sin(elapsed * 0.72 + mob.id) * 0.08;
+    tentacles.forEach((tendril, index) => {
+      tendril.rotation.y = Math.sin(elapsed * 2.1 + index * 0.9) * 0.3;
+      tendril.rotation.z += Math.sin(elapsed * 1.7 + index) * 0.08;
+    });
+    extras.forEach((part, index) => {
+      part.rotation.y += (index % 2 ? -1 : 1) * dt * 0.12;
+    });
+    if ((mob.attackAnim || 0) > 0) {
+      const progress = clamp01(
+          1 - (mob.attackAnim || 0) / (mob.attackTotal || 1.28),
+        ),
+        gather =
+          smoothRange(0, 0.42, progress) *
+          (1 - smoothRange(0.5, 0.65, progress)),
+        release =
+          smoothRange(0.4, 0.64, progress) *
+          (1 - smoothRange(0.78, 1, progress));
+      motion.scale.multiplyScalar(1 - gather * 0.12 + release * 0.18);
+      motion.position.z += release * 0.34;
+      torso.rotation.y += gather * 0.8;
+    }
   } else {
     const slimeBody = data.slimeBody as THREE.Mesh;
-    const bounce = Math.sin(phase * 2);
-    slimeBody.scale.set(
-      0.62 * (1 - bounce * 0.08 * locomotion),
-      0.52 * (1 + Math.abs(bounce) * 0.18 * locomotion),
-      0.62 * (1 - bounce * 0.08 * locomotion),
-    );
+    const bounce = Math.sin(phase * 2),
+      slimeBase = slimeBody.userData.baseScale as THREE.Vector3;
+    slimeBody.scale.copy(slimeBase);
+    slimeBody.scale.x *= 1 - bounce * 0.08 * locomotion;
+    slimeBody.scale.y *= 1 + Math.abs(bounce) * 0.18 * locomotion;
+    slimeBody.scale.z *= 1 - bounce * 0.08 * locomotion;
     motion.position.y = Math.max(0, bounce) * 0.12 * locomotion;
     if ((mob.attackAnim || 0) > 0) {
       const progress = clamp01(
@@ -2095,8 +3039,9 @@ export function createGame3D(
     }),
   );
   scene.add(embers);
-  let firstPersonRig = buildFirstPersonRig(''),
-    playerJob = '';
+  let firstPersonRig = buildFirstPersonRig('', 0),
+    playerJob = '',
+    playerRank = -1;
   camera.add(firstPersonRig);
   const constructionCrew = buildConstructionCrew(mobile);
   scene.add(constructionCrew);
@@ -2141,11 +3086,12 @@ export function createGame3D(
   const render = (world: RenderWorld, dt: number) => {
     elapsed += dt;
     ensureSize();
-    if (world.job !== playerJob) {
+    if (world.job !== playerJob || world.rank !== playerRank) {
       camera.remove(firstPersonRig);
-      firstPersonRig = buildFirstPersonRig(world.job);
+      firstPersonRig = buildFirstPersonRig(world.job, world.rank);
       camera.add(firstPersonRig);
       playerJob = world.job;
+      playerRank = world.rank;
       lastX = world.x;
       lastY = world.y;
     }
@@ -2226,22 +3172,24 @@ export function createGame3D(
     let visibleAllies = 0;
     const detailedAllyLimit = mobile ? 4 : 8;
     world.mobs.forEach((mob) => {
+      const dx = mob.x - world.x,
+        dy = mob.y - world.y,
+        dist = Math.hypot(dx, dy),
+        visibleRange = mob.boss ? (mobile ? 2100 : 3200) : mobile ? 1050 : 1650,
+        allyAllowed = !mob.ally || visibleAllies < detailedAllyLimit;
       let obj = mobs.get(mob.id);
       if (obj && obj.userData.ally !== !!mob.ally) {
         scene.remove(obj);
         mobs.delete(mob.id);
         obj = undefined;
       }
+      if (!obj && (dist >= visibleRange || !allyAllowed)) return;
       if (!obj) {
         obj = buildRiggedMob(mob);
         mobs.set(mob.id, obj);
         scene.add(obj);
       }
-      const dx = mob.x - world.x,
-        dy = mob.y - world.y,
-        dist = Math.hypot(dx, dy);
-      const allyAllowed = !mob.ally || visibleAllies < detailedAllyLimit;
-      obj.visible = dist < (mobile ? 1050 : 1650) && allyAllowed;
+      obj.visible = dist < visibleRange && allyAllowed;
       if (!obj.visible) return;
       if (mob.ally) visibleAllies++;
       const mobData = obj.userData;
@@ -2391,4 +3339,177 @@ export function createGame3D(
     renderer.dispose();
   };
   return { render, dispose };
+}
+
+export function createDemonPreview(
+  canvas: HTMLCanvasElement,
+  job: string,
+  rank: number,
+) {
+  const renderer = new THREE.WebGLRenderer({
+    canvas,
+    antialias: true,
+    alpha: true,
+    powerPreference: 'high-performance',
+  });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.15;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
+  const scene = new THREE.Scene(),
+    camera = new THREE.PerspectiveCamera(34, 1, 0.08, 30);
+  camera.position.set(0, 1.35, 4.55);
+  camera.lookAt(0, 1.12, 0);
+  scene.add(new THREE.HemisphereLight(0x8e92c8, 0x24101f, 1.7));
+  const keyLight = new THREE.DirectionalLight(0xffd1aa, 3.5);
+  keyLight.position.set(-3.2, 5.4, 4.2);
+  keyLight.castShadow = true;
+  keyLight.shadow.mapSize.set(512, 512);
+  scene.add(keyLight);
+  const magicLight = new THREE.PointLight(
+    rank >= 6 ? 0xc28cff : 0x7b4fc9,
+    2.2 + rank * 0.45,
+    8,
+  );
+  magicLight.position.set(2.2, 1.8, 1.7);
+  scene.add(magicLight);
+  const floor = mesh(
+    new THREE.CircleGeometry(2.4, 42),
+    new THREE.MeshStandardMaterial({
+      color: 0x15101c,
+      roughness: 0.84,
+      metalness: 0.18,
+    }),
+    [1, 1, 1],
+    [0, 0, 0],
+    scene,
+  );
+  floor.rotation.x = -Math.PI / 2;
+  floor.receiveShadow = true;
+  const demon = buildRiggedPlayer(job, rank);
+  demon.rotation.y = -0.28;
+  scene.add(demon);
+  const reveal = new THREE.Group(),
+    revealMaterial = new THREE.MeshBasicMaterial({
+      color: rank >= 6 ? 0xe0b7ff : 0x9e62e8,
+      transparent: true,
+      opacity: 0.9,
+      depthWrite: false,
+    });
+  scene.add(reveal);
+  for (let i = 0; i < 24; i++) {
+    const shard = mesh(
+      geo.octa,
+      revealMaterial,
+      [0.035, 0.12 + (i % 3) * 0.03, 0.035],
+      [0, 0, 0],
+      reveal,
+      false,
+    );
+    shard.userData.angle = (i / 24) * Math.PI * 2;
+    shard.userData.height = 0.25 + (i % 7) * 0.25;
+  }
+  let frameId = 0,
+    last = performance.now(),
+    elapsed = 0,
+    targetYaw = -0.28,
+    dragging = false,
+    dragX = 0;
+  const resize = () => {
+    const width = Math.max(1, canvas.clientWidth),
+      height = Math.max(1, canvas.clientHeight);
+    renderer.setSize(width, height, false);
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+  };
+  const down = (event: PointerEvent) => {
+    dragging = true;
+    dragX = event.clientX;
+    canvas.setPointerCapture(event.pointerId);
+  };
+  const move = (event: PointerEvent) => {
+    if (!dragging) return;
+    targetYaw += (event.clientX - dragX) * 0.008;
+    dragX = event.clientX;
+  };
+  const up = () => {
+    dragging = false;
+  };
+  canvas.addEventListener('pointerdown', down);
+  canvas.addEventListener('pointermove', move);
+  canvas.addEventListener('pointerup', up);
+  canvas.addEventListener('pointercancel', up);
+  const draw = (now: number) => {
+    const dt = Math.min(0.04, (now - last) / 1000);
+    last = now;
+    elapsed += dt;
+    resize();
+    const data = demon.userData,
+      pelvis = data.pelvis as THREE.Group,
+      torso = data.torso as THREE.Group,
+      head = data.head as THREE.Group,
+      arms = data.arms as JointLimb[],
+      cape = data.cape as THREE.Mesh,
+      aura = data.aura as THREE.Mesh,
+      revealProgress = smooth01(Math.min(1, elapsed / 1.25)),
+      breath = Math.sin(elapsed * 2.05);
+    demon.rotation.y = dampAngle(demon.rotation.y, targetYaw, 8, dt);
+    if (!dragging) targetYaw += dt * 0.08;
+    demon.scale.setScalar(0.76 + revealProgress * 0.24);
+    demon.position.y = -(1 - revealProgress) * 0.24;
+    pelvis.position.y = 0.9 + Math.sin(elapsed * 1.7) * 0.008;
+    torso.rotation.set(0, Math.sin(elapsed * 0.52) * 0.025, 0);
+    torso.scale.set(1 - breath * 0.003, 1 + breath * 0.008, 1 - breath * 0.003);
+    head.rotation.set(
+      Math.sin(elapsed * 0.73) * 0.018,
+      Math.sin(elapsed * 0.41) * 0.055,
+      0,
+    );
+    arms.forEach((arm, index) => {
+      arm.upper.rotation.set(
+        -0.08 + Math.sin(elapsed * 1.1 + index * Math.PI) * 0.018,
+        0,
+        arm.side * 0.07,
+      );
+      arm.lower.rotation.x = -0.1;
+    });
+    cape.rotation.x = -0.08 + Math.sin(elapsed * 1.6) * 0.02;
+    if (aura.visible) {
+      aura.rotation.z = elapsed * 0.38;
+      (aura.material as THREE.MeshBasicMaterial).opacity =
+        (0.1 + rank * 0.035) * revealProgress;
+    }
+    const bodyGlow = data.bodyGlow as THREE.MeshStandardMaterial;
+    bodyGlow.emissiveIntensity =
+      1.2 + rank * 0.55 + Math.sin(elapsed * 3.4) * 0.35;
+    const burst = Math.min(1, elapsed / 1.6);
+    reveal.visible = burst < 1;
+    revealMaterial.opacity = Math.max(0, 1 - burst) * 0.9;
+    reveal.children.forEach((shard, index) => {
+      const angle = shard.userData.angle as number,
+        radius = 0.25 + Math.sin(burst * Math.PI) * (0.8 + (index % 4) * 0.12);
+      shard.position.set(
+        Math.sin(angle) * radius,
+        (shard.userData.height as number) + burst * 0.38,
+        Math.cos(angle) * radius,
+      );
+      shard.rotation.y = elapsed * 2 + angle;
+    });
+    magicLight.intensity = 2.2 + rank * 0.45 + (1 - burst) * 5;
+    renderer.render(scene, camera);
+    frameId = requestAnimationFrame(draw);
+  };
+  frameId = requestAnimationFrame(draw);
+  return {
+    dispose() {
+      cancelAnimationFrame(frameId);
+      canvas.removeEventListener('pointerdown', down);
+      canvas.removeEventListener('pointermove', move);
+      canvas.removeEventListener('pointerup', up);
+      canvas.removeEventListener('pointercancel', up);
+      renderer.dispose();
+    },
+  };
 }
