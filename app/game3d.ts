@@ -44,6 +44,7 @@ type RenderMob = {
   hitAnim?: number;
   deathAnim?: number;
   dead?: boolean;
+  recruitTime?: number;
 };
 type RenderNode = {
   id: number;
@@ -58,6 +59,12 @@ type RenderBase = {
   y: number;
   yaw: number;
   level: number;
+  kind: string;
+  name: string;
+  progress: number;
+  duration: number;
+  complete: boolean;
+  workers: number;
 };
 export type RenderWorld = {
   x: number;
@@ -75,6 +82,7 @@ export type RenderWorld = {
   buildAnim: number;
   buildMode: boolean;
   buildYaw: number;
+  selectedBuilding: string;
   bases: RenderBase[];
   minions: number;
   facingX: number;
@@ -1321,42 +1329,263 @@ function animateFirstPersonRig(
 }
 
 function buildFieldBase(site: RenderBase, ghost = false) {
-  const root = new THREE.Group();
-  const ghostMaterial = new THREE.MeshStandardMaterial({
-    color: 0x69dcb2,
-    transparent: true,
-    opacity: 0.32,
-    roughness: 0.8,
-    depthWrite: false,
-  });
-  const stone = ghost ? ghostMaterial : mats.stoneDark;
-  const wood = ghost ? ghostMaterial : mats.wood;
-  const width = 2.8 + Math.min(site.level, 6) * 0.16;
-  mesh(
-    new RoundedBoxGeometry(width, 0.3, 2.5, 2, 0.06),
-    stone,
-    [1, 1, 1],
-    [0, 0.15, 0],
-    root,
-  );
-  for (const x of [-width / 2 + 0.18, width / 2 - 0.18])
-    mesh(geo.box, stone, [0.22, 1.7, 1.2], [x, 1.0, 0], root);
-  mesh(geo.box, stone, [0.95, 1.7, 0.18], [-0.92, 1.0, -1.15], root);
-  mesh(geo.box, stone, [0.95, 1.7, 0.18], [0.92, 1.0, -1.15], root);
-  mesh(geo.box, stone, [width / 2, 0.18, 1.25], [0, 1.92, 0], root);
-  for (const x of [-1.1, 1.1])
-    mesh(geo.cylinder, wood, [0.07, 1.1, 0.07], [x, 1.05, 1.05], root);
-  const banner = mesh(
-    geo.box,
-    ghost ? ghostMaterial : mats.cloth,
-    [0.45, 0.6, 0.025],
-    [0, 2.35, 0.05],
-    root,
-  );
-  banner.castShadow = !ghost;
+  const root = new THREE.Group(),
+    ghostMaterial = new THREE.MeshStandardMaterial({
+      color: 0x69dcb2,
+      emissive: 0x164c40,
+      emissiveIntensity: 0.55,
+      transparent: true,
+      opacity: 0.32,
+      roughness: 0.8,
+      depthWrite: false,
+    }),
+    stone = ghost ? ghostMaterial : mats.stoneDark,
+    stoneLight = ghost ? ghostMaterial : mats.stone,
+    wood = ghost ? ghostMaterial : mats.wood,
+    iron = ghost ? ghostMaterial : mats.iron,
+    cloth = ghost ? ghostMaterial : mats.cloth,
+    glow = ghost ? ghostMaterial : mats.crystal,
+    fire = ghost ? ghostMaterial : mats.lava,
+    block = (
+      scale: [number, number, number],
+      position: [number, number, number],
+      material: THREE.Material = stone,
+    ) => mesh(geo.box, material, scale, position, root, !ghost),
+    post = (
+      scale: [number, number, number],
+      position: [number, number, number],
+      material: THREE.Material = wood,
+    ) => mesh(geo.cylinder, material, scale, position, root, !ghost),
+    tower = (x: number, z: number, height: number, radius = 0.8) => {
+      post([radius, height, radius], [x, height / 2, z], stone);
+      post(
+        [radius * 1.18, 0.13, radius * 1.18],
+        [x, height + 0.08, z],
+        stoneLight,
+      );
+      for (let i = 0; i < 6; i++) {
+        const angle = (i / 6) * Math.PI * 2;
+        block(
+          [0.14, 0.22, 0.18],
+          [
+            x + Math.cos(angle) * radius * 0.85,
+            height + 0.28,
+            z + Math.sin(angle) * radius * 0.85,
+          ],
+          stoneLight,
+        );
+      }
+    },
+    banner = (x: number, y: number, z: number, sx = 0.38, sy = 0.58) =>
+      block([sx, sy, 0.025], [x, y, z], cloth),
+    room = (
+      halfX: number,
+      halfZ: number,
+      height: number,
+      material: THREE.Material = stone,
+      doorHalf = 0.5,
+    ) => {
+      const y = 0.32 + height / 2,
+        frontWidth = halfX - doorHalf;
+      block([0.18, height, halfZ * 2], [-halfX, y, 0], material);
+      block([0.18, height, halfZ * 2], [halfX, y, 0], material);
+      block([halfX * 2, height, 0.18], [0, y, halfZ], material);
+      block(
+        [frontWidth, height, 0.18],
+        [-(doorHalf + frontWidth / 2), y, -halfZ],
+        material,
+      );
+      block(
+        [frontWidth, height, 0.18],
+        [doorHalf + frontWidth / 2, y, -halfZ],
+        material,
+      );
+      block(
+        [doorHalf * 2, 0.28, 0.2],
+        [0, 0.32 + height - 0.14, -halfZ],
+        material,
+      );
+      block(
+        [halfX * 2 + 0.18, 0.18, halfZ * 2 + 0.18],
+        [0, 0.32 + height + 0.1, 0],
+        wood,
+      );
+    };
+
+  block([2.1, 0.16, 1.8], [0, 0.16, 0], stoneLight);
+  switch (site.kind) {
+    case 'storage': {
+      room(1.75, 1.35, 2.15, wood, 0.48);
+      const roof = mesh(
+        geo.cone,
+        stone,
+        [2.2, 0.82, 1.8],
+        [0, 2.72, 0.15],
+        root,
+        !ghost,
+      );
+      roof.rotation.y = Math.PI / 4;
+      for (const x of [-1.15, 0, 1.15])
+        block([0.42, 0.42, 0.42], [x, 0.58, 1.25], wood);
+      break;
+    }
+    case 'barracks': {
+      room(2.8, 1.35, 1.9, stone, 0.62);
+      const roof = mesh(
+        geo.cone,
+        iron,
+        [3.25, 0.62, 1.8],
+        [0, 2.32, 0.15],
+        root,
+        !ghost,
+      );
+      roof.rotation.y = Math.PI / 4;
+      banner(-2.85, 1.55, -1.25, 0.3, 0.72);
+      banner(2.85, 1.55, -1.25, 0.3, 0.72);
+      for (const x of [-1.7, -0.58, 0.58, 1.7])
+        block([0.72, 0.18, 0.48], [x, 0.55, 0.48], wood);
+      break;
+    }
+    case 'smithy': {
+      room(2.15, 1.45, 1.8, stone, 0.68);
+      block([0.62, 0.62, 0.5], [0.82, 0.77, -0.88], stone);
+      block([0.46, 0.24, 0.38], [0.82, 1.18, -0.9], fire);
+      post([0.24, 1.2, 0.24], [1.2, 2.0, 0.55], iron);
+      const anvil = block([0.48, 0.16, 0.24], [-0.25, 0.82, -1.56], iron);
+      anvil.rotation.y = Math.PI / 2;
+      break;
+    }
+    case 'laboratory': {
+      room(1.85, 1.55, 2.1, stone, 0.62);
+      tower(-1.75, 0.75, 2.8, 0.48);
+      tower(1.75, 0.75, 2.8, 0.48);
+      for (const [x, z, s] of [
+        [0, -1.05, 0.55],
+        [-0.9, 0.15, 0.34],
+        [0.9, 0.42, 0.3],
+      ] as const)
+        mesh(geo.octa, glow, [s, s * 1.9, s], [x, 1.38 + s, z], root, !ghost);
+      break;
+    }
+    case 'watchtower': {
+      tower(0, 0.1, 5.3, 1.05);
+      block([1.5, 0.18, 1.5], [0, 4.25, 0.1], wood);
+      banner(0, 5.0, -1.1, 0.5, 0.85);
+      break;
+    }
+    case 'wall': {
+      block([4.6, 1.65, 0.48], [0, 1.8, 0], stone);
+      for (let x = -4.35; x <= 4.35; x += 0.7)
+        block([0.22, 0.3, 0.56], [x, 3.68, 0], stoneLight);
+      tower(-4.6, 0, 4.1, 0.62);
+      tower(4.6, 0, 4.1, 0.62);
+      break;
+    }
+    case 'gate': {
+      tower(-2.3, 0, 5.0, 1.1);
+      tower(2.3, 0, 5.0, 1.1);
+      block([2.25, 0.85, 0.72], [0, 4.15, 0], stone);
+      block([1.55, 1.62, 0.2], [0, 1.72, 0], iron);
+      for (const x of [-1.25, -0.62, 0, 0.62, 1.25])
+        block([0.055, 1.55, 0.24], [x, 1.72, -0.08], iron);
+      banner(-2.3, 4.25, -1.12, 0.42, 0.78);
+      banner(2.3, 4.25, -1.12, 0.42, 0.78);
+      break;
+    }
+    case 'fortress':
+    case 'castle':
+    case 'demon-castle': {
+      const castleScale =
+          site.kind === 'demon-castle'
+            ? 1.85
+            : site.kind === 'castle'
+              ? 1.4
+              : 1,
+        half = 3.4 * castleScale,
+        keepHeight = 4.5 * castleScale;
+      block([half, 0.2, half], [0, 0.2, 0], stoneLight);
+      for (const [x, z] of [
+        [-half, -half],
+        [half, -half],
+        [-half, half],
+        [half, half],
+      ] as const)
+        tower(x, z, keepHeight * 0.9, 0.75 * castleScale);
+      block(
+        [2.0 * castleScale, keepHeight / 2, 1.8 * castleScale],
+        [0, keepHeight / 2, 0.7 * castleScale],
+        stone,
+      );
+      block(
+        [half, 1.15 * castleScale, 0.38 * castleScale],
+        [0, 1.25 * castleScale, half],
+        stone,
+      );
+      block(
+        [0.38 * castleScale, 1.15 * castleScale, half],
+        [-half, 1.25 * castleScale, 0],
+        stone,
+      );
+      block(
+        [0.38 * castleScale, 1.15 * castleScale, half],
+        [half, 1.25 * castleScale, 0],
+        stone,
+      );
+      block(
+        [1.15 * castleScale, 1.5 * castleScale, 0.42 * castleScale],
+        [-1.72 * castleScale, 1.6 * castleScale, -half],
+        stone,
+      );
+      block(
+        [1.15 * castleScale, 1.5 * castleScale, 0.42 * castleScale],
+        [1.72 * castleScale, 1.6 * castleScale, -half],
+        stone,
+      );
+      if (site.kind !== 'fortress') {
+        tower(0, 0.85 * castleScale, keepHeight * 1.55, 0.9 * castleScale);
+        mesh(
+          geo.octa,
+          glow,
+          [0.38 * castleScale, 0.85 * castleScale, 0.38 * castleScale],
+          [0, keepHeight * 1.58, 0.85 * castleScale],
+          root,
+          !ghost,
+        );
+      }
+      if (site.kind === 'demon-castle') {
+        for (const x of [-2.15, 2.15]) {
+          const spire = mesh(
+            geo.cone,
+            iron,
+            [0.66, 3.8, 0.66],
+            [x * castleScale, keepHeight * 1.23, 0.65 * castleScale],
+            root,
+            !ghost,
+          );
+          spire.rotation.z = x < 0 ? 0.12 : -0.12;
+        }
+        banner(
+          0,
+          keepHeight * 0.78,
+          -1.13 * castleScale,
+          0.82 * castleScale,
+          1.25 * castleScale,
+        );
+      }
+      break;
+    }
+    case 'hideout':
+    default: {
+      room(1.65, 1.28, 1.8, stone, 0.5);
+      post([0.08, 1.08, 0.08], [-1.36, 1.1, 1.08], wood);
+      post([0.08, 1.08, 0.08], [1.36, 1.1, 1.08], wood);
+      banner(0, 2.55, 0.05);
+    }
+  }
   root.position.set(worldX(site.x), 0, worldZ(site.y));
   root.rotation.y = site.yaw;
   root.userData.ghostMaterial = ghostMaterial;
+  root.userData.kind = site.kind;
   return root;
 }
 
@@ -1964,6 +2193,22 @@ function buildRiggedMob(mob: RenderMob) {
   };
   bar.position.y = heightByKind[kind] * scale;
   root.add(bar);
+  const surrender = mesh(
+    new THREE.RingGeometry(0.34, 0.42, 24),
+    new THREE.MeshBasicMaterial({
+      color: 0xffcf68,
+      transparent: true,
+      opacity: 0.72,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    }),
+    [1, 1, 1],
+    [0, 0.08, 0],
+    root,
+    false,
+  );
+  surrender.rotation.x = -Math.PI / 2;
+  surrender.visible = false;
   root.userData = {
     kind,
     motion,
@@ -1982,6 +2227,7 @@ function buildRiggedMob(mob: RenderMob) {
     bossAura,
     variant,
     bar,
+    surrender,
     ally: !!mob.ally,
     baseScale: scale,
     shapeScale,
@@ -2609,6 +2855,14 @@ function animateMobRig(
     motion.position.y -= death * 0.24;
     motion.scale.y *= 1 - death * 0.12;
   }
+  const surrender = data.surrender as THREE.Mesh;
+  surrender.visible = !!mob.dead && !mob.boss && (mob.recruitTime || 0) > 0;
+  if (surrender.visible) {
+    surrender.rotation.z = elapsed * 1.8;
+    surrender.scale.setScalar(0.86 + Math.sin(elapsed * 4 + mob.id) * 0.09);
+    (surrender.material as THREE.MeshBasicMaterial).opacity =
+      0.35 + Math.min(0.45, (mob.recruitTime || 0) / 22);
+  }
 }
 
 function animateConstruction(
@@ -2618,8 +2872,11 @@ function animateConstruction(
 ) {
   crew.visible = world.buildAnim > 0;
   if (!crew.visible) return;
-  const workers = crew.userData.workers as THREE.Group[];
+  const workers = crew.userData.workers as THREE.Group[],
+    assignedWorkers = world.bases.find((site) => !site.complete)?.workers || 0;
   workers.forEach((worker, index) => {
+    worker.visible = index < assignedWorkers;
+    if (!worker.visible) return;
     const data = worker.userData,
       motion = data.motion as THREE.Group,
       torso = data.torso as THREE.Group,
@@ -3048,10 +3305,23 @@ export function createGame3D(
   const mobs = new Map<number, THREE.Group>(),
     nodes = new Map<number, THREE.Group>(),
     bases = new Map<number, THREE.Group>();
-  const buildGhost = buildFieldBase(
-    { id: -1, x: 0, y: 0, yaw: 0, level: 1 },
-    true,
-  );
+  let ghostKind = 'hideout',
+    buildGhost = buildFieldBase(
+      {
+        id: -1,
+        x: 0,
+        y: 0,
+        yaw: 0,
+        level: 1,
+        kind: ghostKind,
+        name: '',
+        progress: 0,
+        duration: 1,
+        complete: false,
+        workers: 0,
+      },
+      true,
+    );
   buildGhost.visible = false;
   scene.add(buildGhost);
   const armyBody = new THREE.InstancedMesh(
@@ -3127,7 +3397,7 @@ export function createGame3D(
       playerSpeedScene > 4.1 ? (mobile ? 78 : 75) : mobile ? 72 : 68;
     camera.fov = THREE.MathUtils.damp(camera.fov, sprintFov, 7, dt);
     camera.updateProjectionMatrix();
-    const buildSite = world.bases[world.bases.length - 1];
+    const buildSite = world.bases.find((site) => !site.complete);
     if (buildSite) {
       constructionCrew.position.set(
         worldX(buildSite.x),
@@ -3145,6 +3415,11 @@ export function createGame3D(
       }
     world.bases.forEach((site) => {
       let base = bases.get(site.id);
+      if (base && base.userData.kind !== site.kind) {
+        scene.remove(base);
+        bases.delete(site.id);
+        base = undefined;
+      }
       if (!base) {
         base = buildFieldBase(site);
         bases.set(site.id, base);
@@ -3152,8 +3427,33 @@ export function createGame3D(
       }
       base.position.set(worldX(site.x), 0, worldZ(site.y));
       base.rotation.y = site.yaw;
+      const progress = site.complete
+        ? 1
+        : clamp01(site.progress / Math.max(0.001, site.duration));
+      base.scale.y = 0.12 + progress * 0.88;
       base.visible = Math.hypot(site.x - world.x, site.y - world.y) < 4200;
     });
+    if (world.buildMode && ghostKind !== world.selectedBuilding) {
+      scene.remove(buildGhost);
+      ghostKind = world.selectedBuilding;
+      buildGhost = buildFieldBase(
+        {
+          id: -1,
+          x: world.x,
+          y: world.y,
+          yaw: world.buildYaw,
+          level: world.rank + 1,
+          kind: ghostKind,
+          name: '',
+          progress: 0,
+          duration: 1,
+          complete: false,
+          workers: 0,
+        },
+        true,
+      );
+      scene.add(buildGhost);
+    }
     buildGhost.visible = world.buildMode;
     if (world.buildMode) {
       buildGhost.position.set(
@@ -3208,6 +3508,7 @@ export function createGame3D(
       obj.position.set(worldX(mob.x), 0, worldZ(mob.y));
       animateMobRig(obj, mob, dt, elapsed, speedScene, desiredYaw);
       const bar = obj.userData.bar as THREE.Group;
+      bar.visible = !mob.dead;
       const parentQuaternion = new THREE.Quaternion();
       obj.getWorldQuaternion(parentQuaternion);
       bar.quaternion.copy(

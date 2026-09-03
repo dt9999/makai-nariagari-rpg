@@ -69,6 +69,9 @@ type Mob = {
   hitAnim?: number;
   deathAnim?: number;
   dead?: boolean;
+  recruitTime?: number;
+  commanderId?: number;
+  assignment?: MinionTask;
 };
 type Node = {
   id: number;
@@ -83,12 +86,49 @@ type PendingHit = {
   delay: number;
   knockback?: number;
 };
+type MinionTask =
+  | 'combat'
+  | 'guard'
+  | 'build'
+  | 'gather'
+  | 'mine'
+  | 'haul'
+  | 'smith'
+  | 'research'
+  | 'scout';
+type MinionUnit = {
+  id: number;
+  name: string;
+  kind: MonsterKind;
+  tier: number;
+  commanderId?: number;
+  assignment: MinionTask;
+  aptitudes: Record<MinionTask, number>;
+};
+type BuildingKind =
+  | 'hideout'
+  | 'storage'
+  | 'barracks'
+  | 'smithy'
+  | 'laboratory'
+  | 'watchtower'
+  | 'wall'
+  | 'gate'
+  | 'fortress'
+  | 'castle'
+  | 'demon-castle';
 type BaseSite = {
   id: number;
   x: number;
   y: number;
   yaw: number;
   level: number;
+  kind: BuildingKind;
+  name: string;
+  progress: number;
+  duration: number;
+  complete: boolean;
+  workers: number;
 };
 type BindingAction =
   | 'forward'
@@ -204,7 +244,13 @@ type World = {
   buildAnim: number;
   buildMode: boolean;
   buildYaw: number;
+  selectedBuilding: BuildingKind;
   bases: BaseSite[];
+  roster: MinionUnit[];
+  workClock: number;
+  forgeProgress: number;
+  researchProgress: number;
+  scoutProgress: number;
   pendingHits: PendingHit[];
   facingX: number;
   facingY: number;
@@ -242,6 +288,183 @@ const RANK_APPEARANCE = [
   '黒角・魔力紋・装備が調和した最高位の魔族。',
   '始まりの双角と紫の瞳が、魔王の威厳ある最終形へ至る。',
 ];
+const MINION_TASKS: {
+  id: MinionTask;
+  name: string;
+  desc: string;
+}[] = [
+  { id: 'combat', name: '戦闘', desc: '敵を追撃して前線で戦う' },
+  { id: 'guard', name: '護衛', desc: '主人公と拠点を優先して守る' },
+  { id: 'build', name: '建築', desc: '建築時間を短縮する' },
+  { id: 'gather', name: '採集', desc: '魔木を継続的に集める' },
+  { id: 'mine', name: '採掘', desc: '瘴気鉱を継続的に掘る' },
+  { id: 'haul', name: '運搬', desc: '採集・採掘効率を高める' },
+  { id: 'smith', name: '鍛冶', desc: '武器強化の進行を蓄積する' },
+  { id: 'research', name: '研究', desc: '経験と魔界知識を獲得する' },
+  { id: 'scout', name: '偵察', desc: '未探索領域の情報を集める' },
+];
+const BUILDINGS: {
+  id: BuildingKind;
+  name: string;
+  desc: string;
+  wood: number;
+  ore: number;
+  seconds: number;
+  rank: number;
+  scale: string;
+}[] = [
+  {
+    id: 'hideout',
+    name: '小さな隠れ家',
+    desc: '休息と敗北時の帰還に使える最小拠点',
+    wood: 3,
+    ore: 2,
+    seconds: 14,
+    rank: 0,
+    scale: '小型',
+  },
+  {
+    id: 'storage',
+    name: '魔材倉庫',
+    desc: '採集・採掘の自動収入を25%高める',
+    wood: 5,
+    ore: 3,
+    seconds: 22,
+    rank: 0,
+    scale: '小型',
+  },
+  {
+    id: 'barracks',
+    name: '魔獣兵舎',
+    desc: '戦闘配下の攻撃力を18%高める長屋',
+    wood: 8,
+    ore: 6,
+    seconds: 34,
+    rank: 1,
+    scale: '中型',
+  },
+  {
+    id: 'smithy',
+    name: '黒鉄鍛冶場',
+    desc: '鍛冶班が職業武器を自動で強化する',
+    wood: 7,
+    ore: 10,
+    seconds: 42,
+    rank: 2,
+    scale: '中型',
+  },
+  {
+    id: 'laboratory',
+    name: '魔力研究所',
+    desc: '研究班が魔界知識を経験値へ変える',
+    wood: 10,
+    ore: 12,
+    seconds: 52,
+    rank: 2,
+    scale: '中型',
+  },
+  {
+    id: 'watchtower',
+    name: '見張り塔',
+    desc: '偵察班の未探索地域発見を加速する',
+    wood: 12,
+    ore: 10,
+    seconds: 58,
+    rank: 3,
+    scale: '大型',
+  },
+  {
+    id: 'wall',
+    name: '城壁',
+    desc: '領地を分断する堅牢な壁',
+    wood: 8,
+    ore: 16,
+    seconds: 62,
+    rank: 3,
+    scale: '大型',
+  },
+  {
+    id: 'gate',
+    name: '魔界門',
+    desc: '軍勢が通過できる城門',
+    wood: 14,
+    ore: 20,
+    seconds: 78,
+    rank: 4,
+    scale: '大型',
+  },
+  {
+    id: 'fortress',
+    name: '前線砦',
+    desc: '敗北時にも戻れる敵領土攻略拠点',
+    wood: 24,
+    ore: 28,
+    seconds: 105,
+    rank: 4,
+    scale: '巨大',
+  },
+  {
+    id: 'castle',
+    name: '魔族城',
+    desc: '領地を統べる本格的な帰還拠点',
+    wood: 42,
+    ore: 48,
+    seconds: 150,
+    rank: 6,
+    scale: '超巨大',
+  },
+  {
+    id: 'demon-castle',
+    name: '魔王城',
+    desc: '配下攻撃を35%高める最終帰還拠点',
+    wood: 90,
+    ore: 110,
+    seconds: 240,
+    rank: 7,
+    scale: '魔王級',
+  },
+];
+const buildingOf = (id: BuildingKind) =>
+  BUILDINGS.find((building) => building.id === id)!;
+const aptitudeFor = (mob: Mob): Record<MinionTask, number> => {
+  const kind = mob.kind || 'imp',
+    base = 1 + mob.tier,
+    aptitudes = Object.fromEntries(
+      MINION_TASKS.map((task) => [task.id, base]),
+    ) as Record<MinionTask, number>,
+    boosts: Record<MonsterKind, MinionTask[]> = {
+      imp: ['build', 'gather', 'scout'],
+      beast: ['combat', 'guard', 'scout'],
+      insect: ['gather', 'mine', 'haul'],
+      golem: ['build', 'mine', 'haul'],
+      flying: ['scout', 'haul', 'guard'],
+      plant: ['gather', 'research', 'build'],
+      slime: ['haul', 'research', 'gather'],
+      armored: ['combat', 'guard', 'smith'],
+      aberration: ['research', 'scout', 'combat'],
+    };
+  boosts[kind].forEach((task, index) => {
+    aptitudes[task] +=
+      3 + mob.tier + (index === (mob.variant || 0) % 3 ? 2 : 0);
+  });
+  return aptitudes;
+};
+const minionFrom = (
+  mob: Mob,
+  assignment: MinionTask = 'combat',
+): MinionUnit => ({
+  id: mob.id,
+  name: mob.name,
+  kind: mob.kind || 'imp',
+  tier: mob.tier,
+  commanderId: mob.commanderId,
+  assignment,
+  aptitudes: aptitudeFor(mob),
+});
+const taskPower = (world: World, task: MinionTask) =>
+  world.roster
+    .filter((unit) => unit.assignment === task)
+    .reduce((total, unit) => total + unit.aptitudes[task], 0);
 const STAT_INFO: { id: StatKey; name: string; desc: string }[] = [
   { id: 'life', name: '生命', desc: '最大HP +12' },
   { id: 'strength', name: '力', desc: '物理攻撃力 +3' },
@@ -962,9 +1185,11 @@ const spawn = (): Mob[] =>
           980 +
           Math.floor(speciesIndex / 2) * 2320 +
           Math.sin(packAngle) * packRadius,
-        name: species.name,
+        name: packIndex === 0 ? '群れ長 ' + species.name : species.name,
         kind: species.kind,
         variant: (regionIndex * 3 + i) % 5,
+        commanderId:
+          packIndex > 0 ? regionIndex * 20 + speciesIndex + 1 : undefined,
         tier,
         hp,
         max: hp,
@@ -1017,7 +1242,27 @@ const fresh = (): World => ({
   buildAnim: 0,
   buildMode: false,
   buildYaw: 0,
-  bases: [{ id: 1, x: 930, y: 1170, yaw: 0, level: 1 }],
+  selectedBuilding: 'hideout',
+  bases: [
+    {
+      id: 1,
+      x: 930,
+      y: 1170,
+      yaw: 0,
+      level: 1,
+      kind: 'hideout',
+      name: '始まりの隠れ家',
+      progress: 1,
+      duration: 1,
+      complete: true,
+      workers: 0,
+    },
+  ],
+  roster: [],
+  workClock: 0,
+  forgeProgress: 0,
+  researchProgress: 0,
+  scoutProgress: 0,
   pendingHits: [],
   facingX: 0,
   facingY: 1,
@@ -1131,6 +1376,8 @@ export default function Home() {
     [growthOpen, setGrowthOpen] = useState(false),
     [transferOpen, setTransferOpen] = useState(false),
     [controlsOpen, setControlsOpen] = useState(false),
+    [minionOpen, setMinionOpen] = useState(false),
+    [buildMenuOpen, setBuildMenuOpen] = useState(false),
     [rankEvolution, setRankEvolution] = useState<number | null>(null),
     [bindings, setBindings] = useState({ ...DEFAULT_BINDINGS }),
     [listening, setListening] = useState<BindingAction | null>(null);
@@ -1143,7 +1390,11 @@ export default function Home() {
         careers: { ...game.current.careers },
         mobs: [...game.current.mobs],
         nodes: [...game.current.nodes],
-        bases: [...game.current.bases],
+        bases: game.current.bases.map((base) => ({ ...base })),
+        roster: game.current.roster.map((unit) => ({
+          ...unit,
+          aptitudes: { ...unit.aptitudes },
+        })),
         pendingHits: [...game.current.pendingHits],
         discovered: [...game.current.discovered],
         conquered: [...game.current.conquered],
@@ -1268,9 +1519,16 @@ export default function Home() {
       w.message =
         t.name + 'を撃破！ ' + regionAt(t.x, t.y).name + 'を領土にした。';
     } else {
+      t.recruitTime = 14;
       w.ore++;
       gain(12 + t.tier * 5);
-      w.message = t.name + 'を撃破。瘴気鉱を獲得。';
+      const followers = w.mobs.filter(
+        (mob) => mob.commanderId === t.id && !mob.ally,
+      ).length;
+      w.message =
+        t.name +
+        'を撃破。14秒以内なら服従を試みられる。' +
+        (followers ? ` この隊長には配下が${followers}体いる。` : '');
     }
   };
   const attack = () => {
@@ -1389,34 +1647,84 @@ export default function Home() {
     sync();
   };
   const recruit = () => {
-    let w = game.current;
+    const w = game.current;
     if (!w.job) return say('先に職業を選択しよう。');
-    let threshold =
-        0.48 +
-        w.stats.leadership * 0.012 +
-        (w.job === 'ruler' ? 0.12 : 0) +
-        (w.unlocked.includes('dominate') ? 0.12 : 0),
-      t = w.mobs.find(
-        (m) =>
-          !m.ally &&
-          !m.boss &&
-          !m.dead &&
-          m.hp / m.max <= threshold &&
-          d(w, m) < 110,
-      );
-    if (!t)
+    const target = w.mobs
+      .filter(
+        (mob) =>
+          !mob.ally &&
+          !mob.boss &&
+          mob.dead &&
+          (mob.recruitTime || 0) > 0 &&
+          d(w, mob) < 120,
+      )
+      .sort((a, b) => d(w, a) - d(w, b))[0];
+    if (!target)
       return say(
-        '敵を弱らせよう。現在の勧誘可能HP：' +
-          Math.round(threshold * 100) +
-          '%以下。',
+        '倒した領土ボス以外の魔物へ近づき、14秒以内に服従を命じよう。',
       );
-    t.ally = true;
-    t.hp = t.max;
-    t.attackAnim = 0;
-    t.attackCd = 0;
-    w.minions++;
+    const followers = w.mobs.filter(
+        (mob) => mob.commanderId === target.id && !mob.ally && !mob.boss,
+      ),
+      playerMight =
+        w.lv * 12 +
+        w.rank * 22 +
+        w.weaponLevel * 6 +
+        w.stats.leadership * 9 +
+        (w.job === 'ruler' ? 20 : 0) +
+        (w.unlocked.includes('dominate') ? 18 : 0),
+      targetMight = target.tier * 23 + followers.length * 5 + 12,
+      chance = Math.max(
+        0.08,
+        Math.min(
+          0.96,
+          0.38 + (playerMight - targetMight) / 125 + w.stats.leadership * 0.012,
+        ),
+      ),
+      rawRoll =
+        Math.sin(target.id * 12.9898 + w.kills * 7.233 + w.minions * 2.417) *
+        43758.5453,
+      roll = rawRoll - Math.floor(rawRoll);
+    if (roll > chance) {
+      target.recruitTime = 0;
+      w.message = `${target.name}は服従を拒み、瘴気へ還った。成功率 ${Math.round(chance * 100)}%。`;
+      sync();
+      return;
+    }
+    const joined = [target, ...followers];
+    joined.forEach((mob, index) => {
+      const assignment: MinionTask = index ? 'guard' : 'combat';
+      mob.ally = true;
+      mob.dead = false;
+      mob.recruitTime = 0;
+      mob.deathAnim = 0;
+      mob.hp = Math.max(1, Math.floor(mob.max * (index ? 0.7 : 0.5)));
+      mob.attackAnim = 0;
+      mob.attackCd = 0;
+      mob.assignment = assignment;
+      if (!w.roster.some((unit) => unit.id === mob.id))
+        w.roster.push(minionFrom(mob, assignment));
+    });
+    w.minions = w.roster.length;
     if (w.minions === 1) w.achievements++;
-    w.message = t.name + 'が' + jobOf(w).name + 'に服従した！';
+    w.message =
+      target.name +
+      'が服従した！ 成功率 ' +
+      Math.round(chance * 100) +
+      '%。' +
+      (followers.length
+        ? ` 隊長配下${followers.length}体も勢力へ加入。`
+        : ' 配下名簿へ登録した。');
+    sync();
+  };
+  const assignMinion = (id: number, assignment: MinionTask) => {
+    const w = game.current,
+      unit = w.roster.find((candidate) => candidate.id === id),
+      mob = w.mobs.find((candidate) => candidate.id === id);
+    if (!unit) return;
+    unit.assignment = assignment;
+    if (mob) mob.assignment = assignment;
+    w.message = `${unit.name}へ「${MINION_TASKS.find((task) => task.id === assignment)!.name}」を命令した。`;
     sync();
   };
   const allocate = (key: StatKey) => {
@@ -1471,45 +1779,68 @@ export default function Home() {
   };
   const build = () => {
     const w = game.current;
-    const c = w.base + 2;
     if (w.buildMode) {
       w.buildMode = false;
       w.message = '建築予定を取り消した。';
       sync();
       return;
     }
-    if (w.wood < c || w.ore < c)
-      return say('拠点強化には魔木・瘴気鉱 各' + c + 'が必要。');
+    if (document.pointerLockElement) document.exitPointerLock();
+    setBuildMenuOpen(true);
+  };
+  const selectBuilding = (kind: BuildingKind) => {
+    const w = game.current,
+      definition = buildingOf(kind);
+    if (w.rank < definition.rank)
+      return say(
+        `${definition.name}は魔族ランク ${RANKS[definition.rank]} で解放。`,
+      );
+    if (w.wood < definition.wood || w.ore < definition.ore)
+      return say(
+        `${definition.name}には魔木${definition.wood}・瘴気鉱${definition.ore}が必要。`,
+      );
+    w.selectedBuilding = kind;
     w.buildMode = true;
     w.buildYaw = w.viewYaw;
-    w.message = '建築予定地を確認中。視点で位置を決め、左クリックで建築開始。';
+    setBuildMenuOpen(false);
+    w.message = `${definition.name}の予定地を確認中。視点で位置を決め、左クリックで着工。`;
     sync();
   };
   const confirmBuild = () => {
     const w = game.current;
     if (!w.buildMode) return;
-    const c = w.base + 2;
-    if (w.wood < c || w.ore < c) {
+    const definition = buildingOf(w.selectedBuilding);
+    if (w.wood < definition.wood || w.ore < definition.ore) {
       w.buildMode = false;
       return say('建築中に必要素材が不足した。');
     }
-    w.wood -= c;
-    w.ore -= c;
-    w.base++;
-    w.maxHp += 12;
-    w.hp = w.maxHp;
-    w.achievements++;
-    w.buildAnim = 5.5;
+    const builders = w.roster.filter((unit) => unit.assignment === 'build'),
+      builderPower = builders.reduce(
+        (total, unit) => total + unit.aptitudes.build,
+        0,
+      ),
+      estimatedDuration = Math.max(
+        definition.seconds * 0.34,
+        definition.seconds / (1 + Math.sqrt(builderPower) * 0.34),
+      );
+    w.wood -= definition.wood;
+    w.ore -= definition.ore;
+    w.buildAnim = estimatedDuration;
     w.buildMode = false;
     w.bases.push({
       id: w.bases.length + 1,
-      x: w.x + w.facingX * 320,
-      y: w.y + w.facingY * 320,
+      x: Math.max(100, Math.min(WORLD_WIDTH - 100, w.x + w.facingX * 320)),
+      y: Math.max(100, Math.min(WORLD_HEIGHT - 100, w.y + w.facingY * 320)),
       yaw: w.viewYaw,
-      level: w.base,
+      level: w.rank + 1,
+      kind: definition.id,
+      name: definition.name,
+      progress: 0,
+      duration: definition.seconds,
+      complete: false,
+      workers: builders.length,
     });
-    w.message =
-      '配下が前線基地の建築を開始した。完成後は内部へ入り利用できる。';
+    w.message = `${definition.name}を着工。建築担当${builders.length}体＋主人公、完成予定${Math.ceil(estimatedDuration)}秒。`;
     sync();
   };
   const raid = () => {
@@ -1618,7 +1949,8 @@ export default function Home() {
       if (e.button === 0) {
         if (game.current.buildMode) confirmBuild();
         else attack();
-        if (document.pointerLockElement !== c) void c.requestPointerLock();
+        if (document.pointerLockElement !== c)
+          void c.requestPointerLock().catch(() => undefined);
       }
       if (e.button === 2) {
         if (game.current.buildMode) build();
@@ -1758,7 +2090,84 @@ export default function Home() {
       w.attackAnim = Math.max(0, w.attackAnim - dt);
       if (w.attackAnim <= 0) w.attackKind = 'none';
       w.hitAnim = Math.max(0, w.hitAnim - dt);
-      w.buildAnim = Math.max(0, w.buildAnim - dt);
+      const incompleteSites = w.bases.filter((site) => !site.complete),
+        builderPower = taskPower(w, 'build'),
+        buildersPerSite = incompleteSites.length
+          ? builderPower / incompleteSites.length
+          : 0,
+        constructionRate = Math.min(
+          1 / 0.34,
+          1 + Math.sqrt(buildersPerSite) * 0.34,
+        );
+      incompleteSites.forEach((site) => {
+        site.workers = Math.floor(
+          w.roster.filter((unit) => unit.assignment === 'build').length /
+            incompleteSites.length,
+        );
+        site.progress = Math.min(
+          site.duration,
+          site.progress + dt * constructionRate,
+        );
+        if (site.progress >= site.duration) {
+          site.complete = true;
+          w.base++;
+          w.maxHp += 12;
+          w.hp = w.maxHp;
+          w.achievements++;
+          w.message = `${site.name}が完成！ 内部と固有設備を利用できる。`;
+        }
+      });
+      w.buildAnim = incompleteSites.some((site) => !site.complete) ? 1 : 0;
+      w.workClock += dt;
+      if (w.workClock >= 8) {
+        w.workClock -= 8;
+        const completed = new Set(
+            w.bases.filter((site) => site.complete).map((site) => site.kind),
+          ),
+          haulPower = taskPower(w, 'haul'),
+          logistics = 1 + Math.min(0.65, haulPower * 0.012),
+          storage = completed.has('storage') ? 1.25 : 1,
+          gatherPower = taskPower(w, 'gather'),
+          minePower = taskPower(w, 'mine'),
+          woodGain = gatherPower
+            ? Math.max(1, Math.floor((gatherPower / 13) * logistics * storage))
+            : 0,
+          oreGain = minePower
+            ? Math.max(1, Math.floor((minePower / 14) * logistics * storage))
+            : 0;
+        w.wood += woodGain;
+        w.ore += oreGain;
+        if (completed.has('smithy')) {
+          w.forgeProgress += taskPower(w, 'smith');
+          const forgeNeed = 70 + w.weaponLevel * 10;
+          if (w.forgeProgress >= forgeNeed && w.weaponLevel < 20) {
+            w.forgeProgress -= forgeNeed;
+            w.weaponLevel++;
+            w.message = `鍛冶班が${jobOf(w).weapon}をLv.${w.weaponLevel}へ強化した。`;
+          }
+        }
+        if (completed.has('laboratory')) {
+          w.researchProgress += taskPower(w, 'research');
+          if (w.researchProgress >= 70) {
+            w.researchProgress -= 70;
+            gain(16 + taskPower(w, 'research'));
+            w.message = '研究班が魔界知識を解析し、経験値を獲得した。';
+          }
+        }
+        const scoutBonus = completed.has('watchtower') ? 1.35 : 1;
+        w.scoutProgress += taskPower(w, 'scout') * scoutBonus;
+        if (w.scoutProgress >= 90) {
+          const discovered = REGIONS.find(
+            (region) => !w.discovered.includes(region.id),
+          );
+          w.scoutProgress -= 90;
+          if (discovered) {
+            w.discovered.push(discovered.id);
+            w.achievements++;
+            w.message = `偵察隊が「${discovered.name}」の位置を地図へ記録した。`;
+          }
+        }
+      }
       if (!sprinting)
         w.energy = Math.min(
           w.maxEnergy,
@@ -1811,6 +2220,7 @@ export default function Home() {
         m.hitAnim = Math.max(0, (m.hitAnim || 0) - dt);
         if (m.dead) {
           m.deathAnim = Math.max(0, (m.deathAnim || 0) - dt);
+          m.recruitTime = Math.max(0, (m.recruitTime || 0) - dt);
           return;
         }
         const behavior = behaviorOf(m),
@@ -1819,28 +2229,79 @@ export default function Home() {
           detect = behavior.detect * (m.boss ? 1.55 : 1);
         let target: Mob | undefined;
         if (m.ally) {
-          target = w.mobs
-            .filter((x) => !x.ally && !x.dead)
-            .sort((a, b) => d(m, a) - d(m, b))[0];
-          const tq = target ? d(m, target) || 1 : 999;
-          if (target && tq < detect) {
-            if (tq > reach && !(m.attackAnim || 0)) {
-              const allySpeed =
-                Math.max(38, behavior.speed) + w.stats.leadership * 2;
-              m.x += ((target.x - m.x) / tq) * allySpeed * dt;
-              m.y += ((target.y - m.y) / tq) * allySpeed * dt;
-            } else if (tq <= reach && (m.attackCd || 0) <= 0) {
-              m.attackTotal = behavior.attack;
-              m.attackAnim = m.attackTotal;
-              m.attackCd = behavior.cooldown;
-              m.attackHit = false;
-              m.attackTarget = target.id;
+          const assignment =
+              m.assignment ||
+              w.roster.find((unit) => unit.id === m.id)?.assignment ||
+              'combat',
+            fieldDuty = assignment === 'combat' || assignment === 'guard';
+          if (fieldDuty) {
+            target = w.mobs
+              .filter((x) => !x.ally && !x.dead)
+              .sort((a, b) => d(m, a) - d(m, b))[0];
+            const tq = target ? d(m, target) || 1 : 999,
+              dutyDetect =
+                assignment === 'guard' ? Math.min(190, detect) : detect;
+            if (target && tq < dutyDetect) {
+              if (tq > reach && !(m.attackAnim || 0)) {
+                const allySpeed =
+                  Math.max(38, behavior.speed) + w.stats.leadership * 2;
+                m.x += ((target.x - m.x) / tq) * allySpeed * dt;
+                m.y += ((target.y - m.y) / tq) * allySpeed * dt;
+              } else if (tq <= reach && (m.attackCd || 0) <= 0) {
+                m.attackTotal = behavior.attack;
+                m.attackAnim = m.attackTotal;
+                m.attackCd = behavior.cooldown;
+                m.attackHit = false;
+                m.attackTarget = target.id;
+              }
+            } else if (
+              q > (assignment === 'guard' ? 62 : 90) &&
+              !(m.attackAnim || 0)
+            ) {
+              const followSpeed =
+                Math.max(54, behavior.speed) + w.stats.leadership * 2;
+              m.x += ((w.x - m.x) / q) * followSpeed * dt;
+              m.y += ((w.y - m.y) / q) * followSpeed * dt;
             }
-          } else if (q > 80 && !(m.attackAnim || 0)) {
-            const followSpeed =
-              Math.max(54, behavior.speed) + w.stats.leadership * 2;
-            m.x += ((w.x - m.x) / q) * followSpeed * dt;
-            m.y += ((w.y - m.y) / q) * followSpeed * dt;
+          } else {
+            const completedBase = [...w.bases]
+                .reverse()
+                .find((site) => site.complete),
+              construction = w.bases.find((site) => !site.complete),
+              resource =
+                assignment === 'gather' || assignment === 'mine'
+                  ? w.nodes
+                      .filter(
+                        (node) =>
+                          node.n > 0 &&
+                          node.kind ===
+                            (assignment === 'gather' ? 'wood' : 'ore'),
+                      )
+                      .sort((a, b) => d(m, a) - d(m, b))[0]
+                  : undefined,
+              scoutDistance = assignment === 'scout' ? 520 : 0,
+              anchor =
+                assignment === 'build' && construction
+                  ? construction
+                  : resource || completedBase || w,
+              targetX =
+                anchor.x +
+                Math.cos(
+                  m.id * 2.17 + now * (assignment === 'scout' ? 0.00035 : 0),
+                ) *
+                  (scoutDistance || 55 + (m.id % 4) * 24),
+              targetY =
+                anchor.y +
+                Math.sin(
+                  m.id * 1.73 + now * (assignment === 'scout' ? 0.00035 : 0),
+                ) *
+                  (scoutDistance || 55 + (m.id % 4) * 24),
+              workDistance = Math.hypot(targetX - m.x, targetY - m.y) || 1;
+            if (workDistance > 38 && !(m.attackAnim || 0)) {
+              const workSpeed = Math.max(34, behavior.speed * 0.78);
+              m.x += ((targetX - m.x) / workDistance) * workSpeed * dt;
+              m.y += ((targetY - m.y) / workDistance) * workSpeed * dt;
+            }
           }
         } else {
           if (q < detect && q > reach && !(m.attackAnim || 0)) {
@@ -1890,9 +2351,23 @@ export default function Home() {
                 (x) => x.id === m.attackTarget && !x.dead,
               );
               if (victim && d(m, victim) < reach + 25) {
+                const barracksBonus = w.bases.some(
+                    (site) => site.complete && site.kind === 'barracks',
+                  )
+                    ? 1.18
+                    : 1,
+                  throneBonus = w.bases.some(
+                    (site) => site.complete && site.kind === 'demon-castle',
+                  )
+                    ? 1.35
+                    : 1;
                 victim.hp -= Math.max(
                   2,
-                  3 + m.tier * 2 + Math.floor(w.stats.leadership * 0.8),
+                  Math.floor(
+                    (3 + m.tier * 2 + Math.floor(w.stats.leadership * 0.8)) *
+                      barracksBonus *
+                      throneBonus,
+                  ),
                 );
                 victim.hitAnim = 0.3;
                 if (victim.hp <= 0) defeat(w, victim);
@@ -1919,19 +2394,33 @@ export default function Home() {
           m.attackAnim = Math.max(0, (m.attackAnim || 0) - dt);
         }
       });
-      w.mobs = w.mobs.filter((m) => !m.dead || (m.deathAnim || 0) > 0);
+      w.mobs = w.mobs.filter(
+        (m) =>
+          !m.dead ||
+          (m.deathAnim || 0) > 0 ||
+          (!m.boss && (m.recruitTime || 0) > 0),
+      );
       if (w.hp <= 0) {
         if (w.job === 'berserker' && w.unlocked.includes('undying')) {
           w.hp = 1;
           w.unlocked = w.unlocked.filter((s) => s !== 'undying');
           w.message = '不死の執念で致命傷に耐えた！';
         } else {
-          w.x = 900;
-          w.y = 1250;
+          const refuge = [...w.bases]
+            .reverse()
+            .find(
+              (site) =>
+                site.complete &&
+                ['hideout', 'fortress', 'castle', 'demon-castle'].includes(
+                  site.kind,
+                ),
+            );
+          w.x = refuge?.x || 900;
+          w.y = refuge?.y || 1250;
           w.viewYaw = 0;
           w.viewPitch = 0;
           w.hp = w.maxHp;
-          w.message = '敗北。忘れられた廃墟へ撤退した。';
+          w.message = `敗北。${refuge?.name || '忘れられた廃墟'}へ撤退した。`;
         }
       }
       view.render(w, dt);
@@ -1959,7 +2448,14 @@ export default function Home() {
     need = hud.lv * 34,
     ready = canRank(hud),
     currentJob = JOBS.find((j) => j.id === hud.job),
-    milestoneGroups = currentJob ? milestonesFor(currentJob.id) : [];
+    milestoneGroups = currentJob ? milestonesFor(currentJob.id) : [],
+    activeConstructions = hud.bases.filter((site) => !site.complete),
+    taskCounts = Object.fromEntries(
+      MINION_TASKS.map((task) => [
+        task.id,
+        hud.roster.filter((unit) => unit.assignment === task.id).length,
+      ]),
+    ) as Record<MinionTask, number>;
   return (
     <main className="game-shell">
       <section className="game-frame open-world">
@@ -2059,7 +2555,7 @@ export default function Home() {
           <div className="build-placement">
             <Hammer size={15} />
             <div>
-              <b>前線基地を配置</b>
+              <b>{buildingOf(hud.selectedBuilding).name}を配置</b>
               <span>
                 視点で位置・向きを確認　左クリック：決定 / 右クリック：取消
               </span>
@@ -2506,6 +3002,145 @@ export default function Home() {
             </section>
           </div>
         )}
+        {buildMenuOpen && (
+          <div className="build-menu-panel">
+            <div className="panel-head">
+              <div>
+                <Hammer size={18} />
+                <b>自由建築</b>
+                <span>歩いて探した場所へ建築予定を配置</span>
+              </div>
+              <button onClick={() => setBuildMenuOpen(false)}>×</button>
+            </div>
+            <div className="build-wallet">
+              <span>
+                魔木 <b>{hud.wood}</b>
+              </span>
+              <span>
+                瘴気鉱 <b>{hud.ore}</b>
+              </span>
+              <span>
+                建築班 <b>{taskCounts.build}体</b>
+              </span>
+            </div>
+            <div className="building-grid">
+              {BUILDINGS.map((building) => {
+                const locked = hud.rank < building.rank,
+                  short = hud.wood < building.wood || hud.ore < building.ore,
+                  power = taskPower(hud, 'build'),
+                  estimate = Math.ceil(
+                    Math.max(
+                      building.seconds * 0.34,
+                      building.seconds / (1 + Math.sqrt(power) * 0.34),
+                    ),
+                  );
+                return (
+                  <button
+                    key={building.id}
+                    className={
+                      (locked ? 'locked ' : '') + (short ? 'short' : '')
+                    }
+                    onClick={() => selectBuilding(building.id)}
+                  >
+                    <div>
+                      <span>{building.scale}</span>
+                      <b>{building.name}</b>
+                      <small>{building.desc}</small>
+                    </div>
+                    <strong>
+                      魔木 {building.wood} / 鉱石 {building.ore}
+                    </strong>
+                    <em>
+                      {locked
+                        ? `RANK ${RANKS[building.rank]}で解放`
+                        : `完成予測 約${estimate}秒`}
+                    </em>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="build-help">
+              選択後、半透明の完成予定を一人称視点で確認できます。左クリックで着工、右クリックで取消。
+            </p>
+          </div>
+        )}
+        {minionOpen && (
+          <div className="minion-panel">
+            <div className="panel-head">
+              <div>
+                <Users size={18} />
+                <b>配下名簿・仕事命令</b>
+                <span>勢力 {hud.roster.length}体 / 配置はいつでも変更可能</span>
+              </div>
+              <button onClick={() => setMinionOpen(false)}>×</button>
+            </div>
+            <div className="task-summary">
+              {MINION_TASKS.map((task) => (
+                <div key={task.id}>
+                  <span>{task.name}</span>
+                  <b>{taskCounts[task.id]}</b>
+                  <small>能力 {Math.floor(taskPower(hud, task.id))}</small>
+                </div>
+              ))}
+            </div>
+            {!hud.roster.length ? (
+              <div className="empty-roster">
+                <Skull />
+                <b>まだ配下はいない</b>
+                <p>
+                  領土ボス以外の魔物を倒し、金色の服従印が消える前に近づいて「配下」を実行してください。
+                </p>
+              </div>
+            ) : (
+              <div className="roster-grid">
+                {hud.roster.map((unit) => {
+                  const strongest = [...MINION_TASKS]
+                    .sort((a, b) => unit.aptitudes[b.id] - unit.aptitudes[a.id])
+                    .slice(0, 3);
+                  return (
+                    <article key={unit.id}>
+                      <div className="minion-id">
+                        <i>{unit.kind.slice(0, 1).toUpperCase()}</i>
+                        <div>
+                          <b>{unit.name}</b>
+                          <span>
+                            戦力階級 {unit.tier} /{' '}
+                            {unit.commanderId ? '隊員' : '独立・隊長'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="aptitudes">
+                        {strongest.map((task) => (
+                          <span key={task.id}>
+                            {task.name} <b>{unit.aptitudes[task.id]}</b>
+                          </span>
+                        ))}
+                      </div>
+                      <label>
+                        現在の命令
+                        <select
+                          value={unit.assignment}
+                          onChange={(event) =>
+                            assignMinion(
+                              unit.id,
+                              event.target.value as MinionTask,
+                            )
+                          }
+                        >
+                          {MINION_TASKS.map((task) => (
+                            <option key={task.id} value={task.id}>
+                              {task.name} — {task.desc}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
         <div className="quest-card">
           <span>現在地</span>
           <b>{current.landmark}</b>
@@ -2519,6 +3154,28 @@ export default function Home() {
           </small>
         </div>
         <div className="notice">{hud.message}</div>
+        {!!activeConstructions.length && (
+          <div className="construction-status">
+            {activeConstructions.slice(0, 2).map((site) => {
+              const progress = Math.min(
+                100,
+                (site.progress / site.duration) * 100,
+              );
+              return (
+                <div key={site.id}>
+                  <span>
+                    <Hammer /> {site.name}
+                    <b>{Math.floor(progress)}%</b>
+                  </span>
+                  <i>
+                    <em style={{ width: `${progress}%` }} />
+                  </i>
+                  <small>建築班 {site.workers}体 + 主人公</small>
+                </div>
+              );
+            })}
+          </div>
+        )}
         <div className="combat-controls">
           <button className="action attack" onClick={attack}>
             <Swords />
@@ -2572,6 +3229,15 @@ export default function Home() {
           <button onClick={gather}>
             <Sparkles />
             採集 <kbd>{bindingName(bindings.gather)}</kbd>
+          </button>
+          <button
+            onClick={() => {
+              if (document.pointerLockElement) document.exitPointerLock();
+              setMinionOpen((open) => !open);
+            }}
+          >
+            <ShieldCheck />
+            配下管理
           </button>
           <button className={hud.buildMode ? 'active' : ''} onClick={build}>
             <Hammer />
