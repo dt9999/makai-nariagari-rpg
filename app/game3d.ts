@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { SCALE, worldX, worldZ, terrainHeight, regionAt } from './world';
+import { createLandscape } from './landscape';
 
 export type RenderRegion = {
   id: string;
@@ -95,11 +97,6 @@ export type RenderWorld = {
   nodes: RenderNode[];
 };
 
-const SCALE = 0.018,
-  CENTER_X = 8000,
-  CENTER_Y = 4500;
-const worldX = (x: number) => (x - CENTER_X) * SCALE;
-const worldZ = (y: number) => (y - CENTER_Y) * SCALE;
 const owner = (world: RenderWorld, region: RenderRegion) =>
   world.conquered.includes(region.id) ? 'own' : region.owner;
 
@@ -2947,6 +2944,7 @@ function seeded(n: number) {
   return x - Math.floor(x);
 }
 
+// oxlint-disable-next-line no-unused-vars -- retained until new landscape visual validation completes
 function addScatter(scene: THREE.Scene, region: RenderRegion, index: number) {
   const forest = region.biome === '森',
     count = forest ? 120 : region.biome === '魔族集落' ? 42 : 68;
@@ -3050,7 +3048,7 @@ function addLandmark(scene: THREE.Scene, region: RenderRegion, index: number) {
   const root = new THREE.Group();
   root.position.set(
     worldX(region.x + region.w * 0.68),
-    0.03,
+    terrainHeight(region.x + region.w * 0.68, region.y + region.h * 0.5),
     worldZ(region.y + region.h * 0.5),
   );
   scene.add(root);
@@ -3229,18 +3227,14 @@ export function createGame3D(
     const groundGeo = new THREE.PlaneGeometry(
         region.w * SCALE,
         region.h * SCALE,
-        8,
-        6,
+        128,
+        180,
       ),
       positions = groundGeo.attributes.position;
     for (let p = 0; p < positions.count; p++) {
-      const x = positions.getX(p),
-        y = positions.getY(p),
-        edge = Math.min(Math.abs(x), Math.abs(y));
-      positions.setZ(
-        p,
-        (seeded(p + i * 31) - 0.5) * 0.13 + (edge < 0.1 ? 0 : 0),
-      );
+      const x = region.x + region.w / 2 + positions.getX(p) / SCALE,
+        y = region.y + region.h / 2 - positions.getY(p) / SCALE;
+      positions.setZ(p, terrainHeight(x, y));
     }
     groundGeo.computeVertexNormals();
     const ground = new THREE.Mesh(groundGeo, groundMat);
@@ -3272,11 +3266,11 @@ export function createGame3D(
     line.position.copy(ground.position);
     scene.add(line);
     grounds.push({ region, mat: groundMat, line: lineMat });
-    addScatter(scene, region, i);
     const before = scene.children.length;
     addLandmark(scene, region, i);
     landmarks.push(scene.children[before] as THREE.Group);
   });
+  const landscape = createLandscape(scene);
   const starGeo = new THREE.BufferGeometry(),
     starPos = new Float32Array(150 * 3);
   for (let i = 0; i < 150; i++) {
@@ -3379,7 +3373,18 @@ export function createGame3D(
         Math.abs(Math.sin(elapsed * (5.2 + playerSpeedScene * 1.5))) *
         0.025 *
         locomotion;
-    camera.position.set(px, 1.68 + world.height + headBob, pz);
+    const groundHeight = terrainHeight(world.x, world.y);
+    camera.position.set(px, groundHeight + 1.68 + world.height + headBob, pz);
+    landscape.update(world.x, world.y, elapsed, mobile ? 1600 : 2400);
+    const environment = regionAt(world.x, world.y);
+    (scene.background as THREE.Color).lerp(
+      new THREE.Color(environment.sky),
+      Math.min(1, dt * 0.5),
+    );
+    (scene.fog as THREE.FogExp2).color.lerp(
+      new THREE.Color(environment.mist),
+      Math.min(1, dt * 0.5),
+    );
     camera.rotation.set(world.viewPitch, Math.PI + world.viewYaw, 0);
     let cameraRoll = Math.sin(elapsed * 5.4) * 0.0025 * locomotion,
       cameraKick = 0;
@@ -3401,7 +3406,7 @@ export function createGame3D(
     if (buildSite) {
       constructionCrew.position.set(
         worldX(buildSite.x),
-        0,
+        terrainHeight(buildSite.x, buildSite.y),
         worldZ(buildSite.y),
       );
       constructionCrew.rotation.y = buildSite.yaw;
@@ -3425,7 +3430,11 @@ export function createGame3D(
         bases.set(site.id, base);
         scene.add(base);
       }
-      base.position.set(worldX(site.x), 0, worldZ(site.y));
+      base.position.set(
+        worldX(site.x),
+        terrainHeight(site.x, site.y),
+        worldZ(site.y),
+      );
       base.rotation.y = site.yaw;
       const progress = site.complete
         ? 1
@@ -3458,7 +3467,10 @@ export function createGame3D(
     if (world.buildMode) {
       buildGhost.position.set(
         worldX(world.x + world.facingX * 320),
-        0.02,
+        terrainHeight(
+          world.x + world.facingX * 320,
+          world.y + world.facingY * 320,
+        ) + 0.02,
         worldZ(world.y + world.facingY * 320),
       );
       buildGhost.rotation.y = world.buildYaw;
@@ -3505,7 +3517,11 @@ export function createGame3D(
         moved > 0.02
           ? Math.atan2(velocityX, velocityY)
           : Math.atan2(world.x - mob.x, world.y - mob.y);
-      obj.position.set(worldX(mob.x), 0, worldZ(mob.y));
+      obj.position.set(
+        worldX(mob.x),
+        terrainHeight(mob.x, mob.y),
+        worldZ(mob.y),
+      );
       animateMobRig(obj, mob, dt, elapsed, speedScene, desiredYaw);
       const bar = obj.userData.bar as THREE.Group;
       bar.visible = !mob.dead;
@@ -3569,7 +3585,11 @@ export function createGame3D(
       }
       obj.visible =
         Math.hypot(node.x - world.x, node.y - world.y) < (mobile ? 620 : 820);
-      obj.position.set(worldX(node.x), 0, worldZ(node.y));
+      obj.position.set(
+        worldX(node.x),
+        terrainHeight(node.x, node.y),
+        worldZ(node.y),
+      );
       obj.rotation.y = elapsed * 0.18 + node.id;
       obj.scale.setScalar(0.82 + node.n * 0.05);
     });
@@ -3612,14 +3632,15 @@ export function createGame3D(
       camera.position.x += Math.sin(elapsed * 53) * 0.025;
       camera.position.y += Math.cos(elapsed * 47) * 0.018;
     }
-    sun.position.set(px - 8, 14, pz + 7);
-    sun.target.position.set(px, 0, pz);
+    sun.position.set(px - 8, groundHeight + 14, pz + 7);
+    sun.target.position.set(px, groundHeight, pz);
     sun.target.updateMatrixWorld();
-    embers.position.set(px, 0, pz);
+    embers.position.set(px, groundHeight, pz);
     embers.rotation.y = elapsed * 0.015;
     renderer.render(scene, camera);
   };
   const dispose = () => {
+    landscape.dispose();
     const geometries = new Set<THREE.BufferGeometry>(),
       materials = new Set<THREE.Material>();
     scene.traverse((o) => {

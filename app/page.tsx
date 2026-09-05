@@ -24,6 +24,16 @@ import {
   Zap,
 } from 'lucide-react';
 import { createDemonPreview, createGame3D } from './game3d';
+import {
+  WORLD_WIDTH,
+  WORLD_HEIGHT,
+  REGIONS,
+  DISCOVERY_SITES,
+  SITE_LABELS,
+  regionAt,
+  subBiomeAt,
+  sitesIn,
+} from './world';
 
 type Owner = 'unknown' | 'wild' | 'enemy' | 'own';
 type MonsterKind =
@@ -72,6 +82,9 @@ type Mob = {
   recruitTime?: number;
   commanderId?: number;
   assignment?: MinionTask;
+  anchorX?: number;
+  anchorY?: number;
+  rare?: boolean;
 };
 type Node = {
   id: number;
@@ -270,6 +283,7 @@ type World = {
   mobs: Mob[];
   nodes: Node[];
   discovered: string[];
+  discoveredSites: string[];
   conquered: string[];
   message: string;
   banner: string;
@@ -866,135 +880,6 @@ const milestonesFor = (jobId: string): Milestone[] => {
     },
   ];
 };
-const WORLD_WIDTH = 16000;
-const WORLD_HEIGHT = 9000;
-const REGION_W = 3200;
-const REGION_H = 4500;
-const REGIONS: Region[] = [
-  {
-    id: 'ruins',
-    name: '忘れられた大廃墟',
-    x: 0,
-    y: 0,
-    w: REGION_W,
-    h: REGION_H,
-    biome: '廃墟',
-    color: '#353347',
-    owner: 'own',
-    landmark: '始まりの地下砦',
-  },
-  {
-    id: 'forest',
-    name: '囁きの魔樹海',
-    x: 3200,
-    y: 0,
-    w: REGION_W,
-    h: REGION_H,
-    biome: '森',
-    color: '#163d38',
-    owner: 'enemy',
-    landmark: '千年魔樹の集落',
-  },
-  {
-    id: 'mountain',
-    name: '骸骨連峰',
-    x: 6400,
-    y: 0,
-    w: REGION_W,
-    h: REGION_H,
-    biome: '岩山',
-    color: '#403945',
-    owner: 'enemy',
-    landmark: '白骨山塞',
-  },
-  {
-    id: 'citadel',
-    name: '黒曜城塞領',
-    x: 9600,
-    y: 0,
-    w: REGION_W,
-    h: REGION_H,
-    biome: '砦',
-    color: '#44202b',
-    owner: 'enemy',
-    landmark: '黒曜大城壁',
-  },
-  {
-    id: 'ashland',
-    name: '灰冠の塔領',
-    x: 12800,
-    y: 0,
-    w: REGION_W,
-    h: REGION_H,
-    biome: '塔',
-    color: '#302b43',
-    owner: 'enemy',
-    landmark: '天を穿つ灰冠塔',
-  },
-  {
-    id: 'waste',
-    name: '赤錆大荒野',
-    x: 0,
-    y: 4500,
-    w: REGION_W,
-    h: REGION_H,
-    biome: '荒野',
-    color: '#563328',
-    owner: 'enemy',
-    landmark: '巨人の監視塔',
-  },
-  {
-    id: 'village',
-    name: '薄暮都市圏',
-    x: 3200,
-    y: 4500,
-    w: REGION_W,
-    h: REGION_H,
-    biome: '魔族集落',
-    color: '#3e2546',
-    owner: 'enemy',
-    landmark: '角笛の城下町',
-  },
-  {
-    id: 'cave',
-    name: '底無し洞窟領',
-    x: 6400,
-    y: 4500,
-    w: REGION_W,
-    h: REGION_H,
-    biome: '洞窟',
-    color: '#1b2637',
-    owner: 'enemy',
-    landmark: '深淵王の大裂け目',
-  },
-  {
-    id: 'volcano',
-    name: '業火火山帯',
-    x: 9600,
-    y: 4500,
-    w: REGION_W,
-    h: REGION_H,
-    biome: '火山',
-    color: '#54221e',
-    owner: 'enemy',
-    landmark: '煉獄火口神殿',
-  },
-  {
-    id: 'castle',
-    name: '魔王城外郭領',
-    x: 12800,
-    y: 4500,
-    w: REGION_W,
-    h: REGION_H,
-    biome: '城',
-    color: '#281b3f',
-    owner: 'enemy',
-    landmark: '封印された巨城',
-  },
-];
-const regionAt = (x: number, y: number) =>
-  REGIONS.find((r) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) ||
-  REGIONS[0];
 const ownerOf = (w: World, r: Region): Owner =>
   w.conquered.includes(r.id) ? 'own' : r.owner;
 const jobOf = (w: World) => JOBS.find((j) => j.id === w.job) || JOBS[0];
@@ -1161,35 +1046,38 @@ const TERRITORY_LORDS: Record<string, MonsterSpecies> = {
 };
 const spawn = (): Mob[] =>
   REGIONS.flatMap((region, regionIndex) =>
-    Array.from({ length: 10 }, (_, i) => {
+    Array.from({ length: 32 }, (_, i) => {
       const tier = Math.min(
         6,
         1 + Math.floor(regionIndex / 2) + (i % 3 === 2 ? 1 : 0),
       );
       const species = (MONSTER_ECOLOGY[region.biome] ||
           MONSTER_ECOLOGY['廃墟'])[i % 4],
-        speciesIndex = i % 4,
         packIndex = Math.floor(i / 4),
-        packAngle = packIndex * 2.35 + speciesIndex * 0.4,
-        packRadius = 80 + packIndex * 58,
-        hp = 30 + tier * 22;
+        member = i % 4,
+        site = sitesIn(region.id)[packIndex],
+        packAngle = member * 2.35 + packIndex * 0.4,
+        packRadius = site.kind === 'camp' ? 300 : 130 + member * 35,
+        hp = (30 + tier * 22) * (i === 31 ? 2.2 : 1),
+        x = site.x + Math.cos(packAngle) * packRadius,
+        y = site.y + Math.sin(packAngle) * packRadius;
       return {
-        id: regionIndex * 20 + i + 1,
-        x:
-          region.x +
-          690 +
-          (speciesIndex % 2) * 1780 +
-          Math.cos(packAngle) * packRadius,
-        y:
-          region.y +
-          980 +
-          Math.floor(speciesIndex / 2) * 2320 +
-          Math.sin(packAngle) * packRadius,
-        name: packIndex === 0 ? '群れ長 ' + species.name : species.name,
+        id: regionIndex * 100 + i + 1,
+        x,
+        y,
+        anchorX: x,
+        anchorY: y,
+        rare: i === 31,
+        name:
+          i === 31
+            ? '希少種 ' + species.name
+            : member === 0
+              ? '群れ長 ' + species.name
+              : species.name,
         kind: species.kind,
         variant: (regionIndex * 3 + i) % 5,
         commanderId:
-          packIndex > 0 ? regionIndex * 20 + speciesIndex + 1 : undefined,
+          member > 0 ? regionIndex * 100 + packIndex * 4 + 1 : undefined,
         tier,
         hp,
         max: hp,
@@ -1198,13 +1086,15 @@ const spawn = (): Mob[] =>
     }),
   );
 const resources = (): Node[] =>
-  Array.from({ length: 120 }, (_, i) => ({
-    id: i,
-    x: 180 + ((i * 1877) % (WORLD_WIDTH - 360)),
-    y: 180 + ((i * 1297) % (WORLD_HEIGHT - 360)),
-    kind: i % 2 ? 'wood' : 'ore',
-    n: 3 + (i % 3),
-  }));
+  DISCOVERY_SITES.flatMap((site, si) =>
+    Array.from({ length: site.kind === 'quarry' ? 18 : 8 }, (_, i) => ({
+      id: si * 30 + i,
+      x: site.x + Math.cos(i * 2.4) * (65 + (i % 5) * 48),
+      y: site.y + Math.sin(i * 2.4) * (65 + (i % 5) * 48),
+      kind: i % 2 ? ('wood' as const) : ('ore' as const),
+      n: site.kind === 'quarry' ? 9 : 4,
+    })),
+  );
 const baseStats = (): Stats => ({
   life: 1,
   strength: 1,
@@ -1215,8 +1105,8 @@ const baseStats = (): Stats => ({
   leadership: 1,
 });
 const fresh = (): World => ({
-  x: 900,
-  y: 1250,
+  x: 1024,
+  y: 1050,
   hp: 100,
   maxHp: 100,
   xp: 0,
@@ -1246,8 +1136,8 @@ const fresh = (): World => ({
   bases: [
     {
       id: 1,
-      x: 930,
-      y: 1170,
+      x: 760,
+      y: 1040,
       yaw: 0,
       level: 1,
       kind: 'hideout',
@@ -1282,6 +1172,7 @@ const fresh = (): World => ({
   mobs: spawn(),
   nodes: resources(),
   discovered: ['ruins'],
+  discoveredSites: [],
   conquered: ['ruins'],
   message: '職業を選び、魔王への一歩を踏み出せ。',
   banner: '自分の領土',
@@ -1397,6 +1288,7 @@ export default function Home() {
         })),
         pendingHits: [...game.current.pendingHits],
         discovered: [...game.current.discovered],
+        discoveredSites: [...(game.current.discoveredSites || [])],
         conquered: [...game.current.conquered],
       }),
     [],
@@ -2020,6 +1912,7 @@ export default function Home() {
       last = now;
       frame++;
       const w = game.current;
+      w.discoveredSites ||= [];
       const held = (action: BindingAction) =>
         !!keys.current[bindingsRef.current[action]];
       const strafe =
@@ -2193,6 +2086,19 @@ export default function Home() {
         if (t.hp <= 0) defeat(w, t);
       });
       w.bannerTime = Math.max(0, w.bannerTime - dt);
+      if (frame % 15 === 0 && w.job) {
+        for (const site of sitesIn(regionAt(w.x, w.y).id)) {
+          if (
+            !w.discoveredSites.includes(site.id) &&
+            d(w, site) < site.radius + 100
+          ) {
+            w.discoveredSites.push(site.id);
+            w.achievements++;
+            gain(10);
+            w.message = `${SITE_LABELS[site.kind]}発見：${site.name} — ${site.description}`;
+          }
+        }
+      }
       let r = regionAt(w.x, w.y);
       if (r.id !== w.region) {
         w.region = r.id;
@@ -2328,8 +2234,11 @@ export default function Home() {
           ) {
             const home = REGIONS.find((region) => region.id === m.home),
               angle = now * 0.00022 * (1 + behavior.wander / 20) + m.id * 1.71;
-            m.x += Math.cos(angle) * behavior.wander * dt;
-            m.y += Math.sin(angle * 0.83) * behavior.wander * dt;
+            const tx = (m.anchorX ?? m.x) + Math.cos(angle) * 100,
+              ty = (m.anchorY ?? m.y) + Math.sin(angle * 0.83) * 100,
+              distance = Math.hypot(tx - m.x, ty - m.y) || 1;
+            m.x += ((tx - m.x) / distance) * behavior.wander * dt;
+            m.y += ((ty - m.y) / distance) * behavior.wander * dt;
             if (home) {
               m.x = Math.max(
                 home.x + 120,
@@ -2725,6 +2634,31 @@ export default function Home() {
                 <i className="unknown" />
                 未探索
               </span>
+            </div>
+            <div className="discovery-map-list">
+              <h3>{current.name} — 発見地点</h3>
+              {sitesIn(current.id).map((site) => (
+                <div
+                  key={site.id}
+                  className={
+                    hud.discoveredSites.includes(site.id) ? 'seen' : ''
+                  }
+                >
+                  <b>
+                    {hud.discoveredSites.includes(site.id)
+                      ? site.name
+                      : '未探索の' + SITE_LABELS[site.kind]}
+                  </b>
+                  <span>
+                    {SITE_LABELS[site.kind]} ·{' '}
+                    {Math.round(d(hud, site) * 0.018)} m
+                  </span>
+                </div>
+              ))}
+              <small>
+                全域 {hud.discoveredSites.length} / {DISCOVERY_SITES.length}{' '}
+                地点発見
+              </small>
             </div>
           </div>
         )}
@@ -3145,7 +3079,7 @@ export default function Home() {
           <span>現在地</span>
           <b>{current.landmark}</b>
           <small>
-            {current.biome} /{' '}
+            {subBiomeAt(hud.x, hud.y)} /{' '}
             {currentOwner === 'enemy'
               ? '敵勢力が支配中'
               : currentOwner === 'own'
