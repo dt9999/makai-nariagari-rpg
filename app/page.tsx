@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Binoculars,
+  Backpack,
   Brain,
   Castle,
   ChevronUp,
@@ -24,6 +25,23 @@ import {
   Zap,
 } from 'lucide-react';
 import { createDemonPreview, createGame3D } from './game3d';
+import { InventoryPanel } from './inventory-panel';
+import './inventory.css';
+import {
+  emptyEquipment,
+  equipmentBonus,
+  itemOf,
+  receiveItem,
+  equipItem,
+  consumeItem,
+  discardItem,
+  exchangeItem,
+  weaponFor,
+  lootFor,
+  type InventoryStack,
+  type Equipment,
+  type WorldLoot,
+} from './items';
 import {
   WORLD_WIDTH,
   WORLD_HEIGHT,
@@ -156,6 +174,7 @@ type BindingAction =
   | 'dodge'
   | 'recruit'
   | 'gather'
+  | 'inventory'
   | 'map';
 const DEFAULT_BINDINGS: Record<BindingAction, string> = {
   forward: 'w',
@@ -170,6 +189,7 @@ const DEFAULT_BINDINGS: Record<BindingAction, string> = {
   dodge: '4',
   recruit: 'e',
   gather: 'f',
+  inventory: 'i',
   map: 'm',
 };
 const BINDING_LABELS: Record<BindingAction, string> = {
@@ -184,7 +204,8 @@ const BINDING_LABELS: Record<BindingAction, string> = {
   skill: 'スキル',
   dodge: '回避',
   recruit: '配下にする',
-  gather: '採集',
+  gather: '調べる・拾う・採集',
+  inventory: '持ち物',
   map: '地図',
 };
 const bindingName = (key: string) =>
@@ -230,6 +251,10 @@ type Career = {
   weaponLevel: number;
 };
 type World = {
+  inventory: InventoryStack[];
+  equipment: Equipment;
+  loot: WorldLoot[];
+  lootSequence: number;
   x: number;
   y: number;
   hp: number;
@@ -1105,6 +1130,32 @@ const baseStats = (): Stats => ({
   leadership: 1,
 });
 const fresh = (): World => ({
+  inventory: [
+    { id: 'potion', count: 2 },
+    { id: 'elixir', count: 1 },
+  ],
+  equipment: emptyEquipment(),
+  loot: DISCOVERY_SITES.filter((site) =>
+    ['camp', 'cave', 'ruin', 'outpost', 'shrine'].includes(site.kind),
+  ).map((site, index) => ({
+    id: index + 1,
+    x: site.x + 42,
+    y: site.y + 55,
+    item:
+      site.kind === 'camp'
+        ? 'potion'
+        : site.kind === 'shrine'
+          ? 'ember-gem'
+          : lootFor(
+              REGIONS.findIndex((r) => r.id === site.region),
+              index,
+              'blade',
+            ),
+    count: 1,
+    chest: true,
+    claimed: false,
+  })),
+  lootSequence: 1000,
   x: 1024,
   y: 1050,
   hp: 100,
@@ -1247,7 +1298,17 @@ const applyCareer = (w: World, id: string, c: Career) => {
   w.stats = { ...c.stats };
   w.unlocked = [...c.unlocked];
   w.weaponLevel = c.weaponLevel;
-  w.maxHp = 100 + w.stats.life * 12 + (w.lv - 1) * 8 + w.base * 12;
+  // Old equipment stays owned, but a new profession starts with its own F weapon.
+  const starter = weaponFor(id, 0);
+  if (!w.inventory.some((stack) => stack.id === starter))
+    receiveItem(w, starter);
+  w.equipment.weapon = starter;
+  w.maxHp =
+    100 +
+    w.stats.life * 12 +
+    (w.lv - 1) * 8 +
+    w.base * 12 +
+    equipmentBonus(w.equipment, id).life;
   w.hp = w.maxHp;
   w.energy = w.maxEnergy;
 };
@@ -1261,6 +1322,7 @@ export default function Home() {
     lookTouch = useRef({ id: -1, x: 0, y: 0 }),
     bindingsRef = useRef({ ...DEFAULT_BINDINGS }),
     listeningRef = useRef<BindingAction | null>(null),
+    menuOpenRef = useRef(false),
     [hud, setHud] = useState<World>(fresh),
     [mapOpen, setMapOpen] = useState(false),
     [rankOpen, setRankOpen] = useState(false),
@@ -1269,6 +1331,7 @@ export default function Home() {
     [controlsOpen, setControlsOpen] = useState(false),
     [minionOpen, setMinionOpen] = useState(false),
     [buildMenuOpen, setBuildMenuOpen] = useState(false),
+    [inventoryOpen, setInventoryOpen] = useState(false),
     [rankEvolution, setRankEvolution] = useState<number | null>(null),
     [bindings, setBindings] = useState({ ...DEFAULT_BINDINGS }),
     [listening, setListening] = useState<BindingAction | null>(null);
@@ -1277,6 +1340,11 @@ export default function Home() {
       setHud({
         ...game.current,
         stats: { ...game.current.stats },
+        inventory: (game.current.inventory || []).map((stack) => ({
+          ...stack,
+        })),
+        equipment: { ...(game.current.equipment || emptyEquipment()) },
+        loot: [...(game.current.loot || [])],
         unlocked: [...game.current.unlocked],
         careers: { ...game.current.careers },
         mobs: [...game.current.mobs],
@@ -1296,6 +1364,47 @@ export default function Home() {
   const say = (s: string) => {
     game.current.message = s;
     sync();
+  };
+  useEffect(() => {
+    menuOpenRef.current =
+      mapOpen ||
+      rankOpen ||
+      growthOpen ||
+      transferOpen ||
+      controlsOpen ||
+      minionOpen ||
+      buildMenuOpen ||
+      inventoryOpen;
+    if (menuOpenRef.current) {
+      keys.current = {};
+      stick.current = { x: 0, y: 0, on: false };
+      lookTouch.current.id = -1;
+      game.current.guarding = false;
+      if (document.pointerLockElement) document.exitPointerLock();
+    }
+  }, [
+    mapOpen,
+    rankOpen,
+    growthOpen,
+    transferOpen,
+    controlsOpen,
+    minionOpen,
+    buildMenuOpen,
+    inventoryOpen,
+  ]);
+  const inventoryAction = (
+    action: 'equip' | 'use' | 'discard' | 'exchange',
+    id: string,
+  ) => {
+    const w = game.current;
+    say(
+      {
+        equip: equipItem,
+        use: consumeItem,
+        discard: discardItem,
+        exchange: exchangeItem,
+      }[action](w, id),
+    );
   };
   const targetsAhead = (w: World, range: number, cone = 0.42) =>
     w.mobs
@@ -1364,7 +1473,15 @@ export default function Home() {
     w.wood -= cost;
     w.ore -= cost;
     w.weaponLevel++;
-    w.message = jobOf(w).weapon + 'をLv.' + w.weaponLevel + 'へ強化！';
+    const forged = weaponFor(w.job, Math.min(3, Math.floor(w.rank / 2)));
+    receiveItem(w, forged);
+    w.message =
+      jobOf(w).weapon +
+      'をLv.' +
+      w.weaponLevel +
+      'へ強化！ ' +
+      itemOf(forged).name +
+      'を持ち物に追加。';
     sync();
   };
   const gain = (n: number) => {
@@ -1400,8 +1517,19 @@ export default function Home() {
     t.dead = true;
     t.deathAnim = 1.15;
     t.hitAnim = 0.32;
+    const dropped = lootFor(t.tier, t.id + w.kills, w.job, !!t.boss);
+    w.loot.push({
+      id: ++w.lootSequence,
+      x: t.x,
+      y: t.y,
+      item: dropped,
+      count: t.rare ? 2 : 1,
+      chest: false,
+      claimed: false,
+    });
     w.kills++;
     if (t.boss) {
+      gain(80 + t.tier * 20);
       w.bossKills++;
       if (!w.conquered.includes(t.home)) {
         w.conquered.push(t.home);
@@ -1444,8 +1572,16 @@ export default function Home() {
           w.lv * 4 +
           w.weaponLevel * 4 +
           w.stats.strength * 3 +
-          w.stats.magic * 4 * j.magic +
-          w.minions * j.minion * (2 + w.stats.leadership * 0.3)) *
+          equipmentBonus(w.equipment, w.job).attack +
+          (w.stats.magic + equipmentBonus(w.equipment, w.job).magic) *
+            4 *
+            j.magic +
+          w.minions *
+            j.minion *
+            (2 +
+              (w.stats.leadership +
+                equipmentBonus(w.equipment, w.job).leadership) *
+                0.3)) *
           j.power *
           (1 + w.unlocked.length * 0.04) *
           branchPower,
@@ -1489,7 +1625,10 @@ export default function Home() {
         w.lv * 6 +
         w.weaponLevel * 7 +
         w.stats.strength * 5 +
-        w.stats.magic * 3 * j.magic) *
+        equipmentBonus(w.equipment, w.job).attack * 1.5 +
+        (w.stats.magic + equipmentBonus(w.equipment, w.job).magic) *
+          3 *
+          j.magic) *
         j.power *
         1.65,
     );
@@ -1524,8 +1663,9 @@ export default function Home() {
         (25 +
           w.lv * 5 +
           w.weaponLevel * 5 +
-          w.stats.magic * 7 +
-          w.stats.strength * 3) *
+          (w.stats.magic + equipmentBonus(w.equipment, w.job).magic) * 7 +
+          w.stats.strength * 3 +
+          equipmentBonus(w.equipment, w.job).attack) *
           (0.7 + j.magic * 0.55),
       ),
       known = j.skills.find((s) => w.unlocked.includes(s.id));
@@ -1562,7 +1702,8 @@ export default function Home() {
         w.lv * 12 +
         w.rank * 22 +
         w.weaponLevel * 6 +
-        w.stats.leadership * 9 +
+        (w.stats.leadership + equipmentBonus(w.equipment, w.job).leadership) *
+          9 +
         (w.job === 'ruler' ? 20 : 0) +
         (w.unlocked.includes('dominate') ? 18 : 0),
       targetMight = target.tier * 23 + followers.length * 5 + 12,
@@ -1660,12 +1801,28 @@ export default function Home() {
     sync();
   };
   const gather = () => {
-    let w = game.current,
-      n = w.nodes.find((n) => n.n && d(w, n) < 75);
-    if (!n) return say('光る魔木・瘴気鉱の近くで採集できる。');
+    let w = game.current;
+    if (!w.job) return say('先に職業を選択しよう。');
+    const loot = w.loot
+      .filter((item) => !item.claimed && d(w, item) < 90)
+      .sort((a, b) => d(w, a) - d(w, b))[0];
+    if (loot) {
+      receiveItem(w, loot.item, loot.count);
+      loot.claimed = true;
+      if (loot.chest) {
+        gain(8);
+        w.achievements++;
+      }
+      return say(
+        `${loot.chest ? '宝箱を開けた。' : '拾得：'}${itemOf(loot.item).name} ×${loot.count} — 持ち物で確認できる。`,
+      );
+    }
+    let n = w.nodes.find((n) => n.n && d(w, n) < 75);
+    if (!n) return say('宝箱・落ちたアイテム・光る採集物へ近づいて調べよう。');
     n.n--;
     if (n.kind === 'wood') w.wood++;
     else w.ore++;
+    if (n.n === 0) receiveItem(w, n.kind === 'ore' ? 'crystal' : 'hide');
     w.message = n.kind === 'wood' ? '魔木を採集した。' : '瘴気鉱を採集した。';
     sync();
   };
@@ -1818,6 +1975,17 @@ export default function Home() {
         changeBinding(listeningRef.current, key);
         return;
       }
+      if (
+        e.target instanceof HTMLElement &&
+        e.target.closest('input,textarea,select,[contenteditable=true]')
+      )
+        return;
+      if (key === bindingsRef.current.inventory && !e.repeat) {
+        e.preventDefault();
+        setInventoryOpen((v) => !v);
+        return;
+      }
+      if (menuOpenRef.current) return;
       keys.current[key] = true;
       const map = bindingsRef.current;
       if (key === map.jump) {
@@ -1838,6 +2006,7 @@ export default function Home() {
       if (key === bindingsRef.current.guard) game.current.guarding = false;
     };
     const mouseDown = (e: MouseEvent) => {
+      if (menuOpenRef.current || !game.current.job) return;
       if (e.button === 0) {
         if (game.current.buildMode) confirmBuild();
         else attack();
@@ -1853,10 +2022,11 @@ export default function Home() {
       if (e.button === 2) game.current.guarding = false;
     };
     const mouseMove = (e: MouseEvent) => {
-      if (document.pointerLockElement === c)
+      if (!menuOpenRef.current && document.pointerLockElement === c)
         rotateView(e.movementX, e.movementY);
     };
     const pointerDown = (e: PointerEvent) => {
+      if (menuOpenRef.current) return;
       if (e.pointerType !== 'touch') return;
       const rect = c.getBoundingClientRect();
       if (e.clientX < rect.left + rect.width * 0.42) return;
@@ -1913,6 +2083,15 @@ export default function Home() {
       frame++;
       const w = game.current;
       w.discoveredSites ||= [];
+      w.inventory ||= [];
+      w.equipment ||= emptyEquipment();
+      w.loot ||= [];
+      w.lootSequence ||= 1000;
+      if (menuOpenRef.current || !w.job) {
+        view.render(w, dt);
+        id = requestAnimationFrame(loop);
+        return;
+      }
       const held = (action: BindingAction) =>
         !!keys.current[bindingsRef.current[action]];
       const strafe =
@@ -2036,7 +2215,12 @@ export default function Home() {
           if (w.forgeProgress >= forgeNeed && w.weaponLevel < 20) {
             w.forgeProgress -= forgeNeed;
             w.weaponLevel++;
-            w.message = `鍛冶班が${jobOf(w).weapon}をLv.${w.weaponLevel}へ強化した。`;
+            const forged = weaponFor(
+              w.job,
+              Math.min(3, Math.floor(w.rank / 2)),
+            );
+            receiveItem(w, forged);
+            w.message = `鍛冶班が武器をLv.${w.weaponLevel}へ強化し、${itemOf(forged).name}を製作した。`;
           }
         }
         if (completed.has('laboratory')) {
@@ -2044,7 +2228,9 @@ export default function Home() {
           if (w.researchProgress >= 70) {
             w.researchProgress -= 70;
             gain(16 + taskPower(w, 'research'));
-            w.message = '研究班が魔界知識を解析し、経験値を獲得した。';
+            const gem = w.rank >= 2 ? 'moon-gem' : 'ember-gem';
+            receiveItem(w, gem);
+            w.message = `研究班が魔界知識を解析し、経験値と${itemOf(gem).name}を獲得した。`;
           }
         }
         const scoutBonus = completed.has('watchtower') ? 1.35 : 1;
@@ -2075,7 +2261,7 @@ export default function Home() {
       w.pendingHits = w.pendingHits.filter((hit) => hit.delay > 0);
       impacts.forEach((hit) => {
         let t = w.mobs.find((m) => m.id === hit.target);
-        if (!t || t.dead) return;
+        if (!t || t.dead || t.ally) return;
         t.hp -= hit.damage;
         t.hitAnim = 0.34;
         if (hit.knockback) {
@@ -2257,7 +2443,7 @@ export default function Home() {
             m.attackHit = true;
             if (m.ally) {
               let victim = w.mobs.find(
-                (x) => x.id === m.attackTarget && !x.dead,
+                (x) => x.id === m.attackTarget && !x.dead && !x.ally,
               );
               if (victim && d(m, victim) < reach + 25) {
                 const barracksBonus = w.bases.some(
@@ -2273,7 +2459,13 @@ export default function Home() {
                 victim.hp -= Math.max(
                   2,
                   Math.floor(
-                    (3 + m.tier * 2 + Math.floor(w.stats.leadership * 0.8)) *
+                    (3 +
+                      m.tier * 2 +
+                      Math.floor(
+                        (w.stats.leadership +
+                          equipmentBonus(w.equipment, w.job).leadership) *
+                          0.8,
+                      )) *
                       barracksBonus *
                       throneBonus,
                   ),
@@ -2288,7 +2480,10 @@ export default function Home() {
                   1,
                   Math.floor(
                     ((m.boss ? 13 : 3 + m.tier) -
-                      Math.floor(w.stats.defense * 0.55)) *
+                      Math.floor(
+                        w.stats.defense * 0.55 +
+                          equipmentBonus(w.equipment, w.job).defense,
+                      )) *
                       branchGuard,
                   ),
                 );
@@ -2353,6 +2548,10 @@ export default function Home() {
     return () => clearTimeout(timeout);
   }, [rankEvolution]);
   const current = regionAt(hud.x, hud.y),
+    nearbyLoot = hud.loot
+      .filter((loot) => !loot.claimed && d(hud, loot) < 90)
+      .sort((a, b) => d(hud, a) - d(hud, b))[0],
+    nearbyNode = hud.nodes.find((node) => node.n > 0 && d(hud, node) < 75),
     currentOwner = ownerOf(hud, current),
     need = hud.lv * 34,
     ready = canRank(hud),
@@ -2368,6 +2567,34 @@ export default function Home() {
   return (
     <main className="game-shell">
       <section className="game-frame open-world">
+        <InventoryPanel
+          world={hud}
+          open={inventoryOpen}
+          onOpenChange={setInventoryOpen}
+          onAction={inventoryAction}
+          message={hud.message}
+        />
+        {hud.job && (
+          <button
+            className="inventory-toggle"
+            onClick={() => setInventoryOpen(true)}
+          >
+            <Backpack size={18} />
+            持ち物 <kbd>{bindingName(bindings.inventory)}</kbd>
+          </button>
+        )}
+        {hud.job && !inventoryOpen && (nearbyLoot || nearbyNode) && (
+          <div className="interaction-prompt">
+            <kbd>{bindingName(bindings.gather)}</kbd>
+            {nearbyLoot
+              ? nearbyLoot.chest
+                ? '宝箱を開ける'
+                : itemOf(nearbyLoot.item).name + 'を拾う'
+              : nearbyNode?.kind === 'ore'
+                ? '瘴気鉱を採掘'
+                : '魔木を採集'}
+          </div>
+        )}
         <header className="topbar">
           <div className="brand">
             <Flame size={20} fill="currentColor" />
@@ -3162,7 +3389,7 @@ export default function Home() {
           </button>
           <button onClick={gather}>
             <Sparkles />
-            採集 <kbd>{bindingName(bindings.gather)}</kbd>
+            調べる <kbd>{bindingName(bindings.gather)}</kbd>
           </button>
           <button
             onClick={() => {

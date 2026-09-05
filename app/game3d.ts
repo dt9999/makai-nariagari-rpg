@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { SCALE, worldX, worldZ, terrainHeight, regionAt } from './world';
 import { createLandscape } from './landscape';
+import { createLootRenderer } from './loot3d';
+import type { WorldLoot } from './items';
 
 export type RenderRegion = {
   id: string;
@@ -69,6 +71,7 @@ type RenderBase = {
   workers: number;
 };
 export type RenderWorld = {
+  loot: WorldLoot[];
   x: number;
   y: number;
   hp: number;
@@ -3271,6 +3274,7 @@ export function createGame3D(
     landmarks.push(scene.children[before] as THREE.Group);
   });
   const landscape = createLandscape(scene);
+  const lootRenderer = createLootRenderer(scene);
   const starGeo = new THREE.BufferGeometry(),
     starPos = new Float32Array(150 * 3);
   for (let i = 0; i < 150; i++) {
@@ -3376,6 +3380,13 @@ export function createGame3D(
     const groundHeight = terrainHeight(world.x, world.y);
     camera.position.set(px, groundHeight + 1.68 + world.height + headBob, pz);
     landscape.update(world.x, world.y, elapsed, mobile ? 1600 : 2400);
+    lootRenderer.update(
+      world.loot || [],
+      world.x,
+      world.y,
+      elapsed,
+      mobile ? 800 : 1400,
+    );
     const environment = regionAt(world.x, world.y);
     (scene.background as THREE.Color).lerp(
       new THREE.Color(environment.sky),
@@ -3641,6 +3652,7 @@ export function createGame3D(
   };
   const dispose = () => {
     landscape.dispose();
+    lootRenderer.dispose();
     const geometries = new Set<THREE.BufferGeometry>(),
       materials = new Set<THREE.Material>();
     scene.traverse((o) => {
