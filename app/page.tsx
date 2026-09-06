@@ -28,6 +28,8 @@ import { createDemonPreview, createGame3D } from './game3d';
 import { InventoryPanel } from './inventory-panel';
 import { RealmMap } from './realm-map';
 import { PreferencesPanel } from './preferences-panel';
+import { TutorialHint, TutorialPanel } from './tutorial-panel';
+import { newTutorial, completeLesson, recordTutorialMotion, type TutorialState } from './tutorial';
 import {
   DEFAULT_PREFERENCES,
   sanitizePreferences,
@@ -276,6 +278,7 @@ type Career = {
   weaponLevel: number;
 };
 type World = {
+  tutorial: TutorialState;
   preferences: GamePreferences;
   talkedSites: string[];
   activatedSites: string[];
@@ -1167,6 +1170,7 @@ const baseStats = (): Stats => ({
   leadership: 1,
 });
 const fresh = (): World => ({
+  tutorial: newTutorial(),
   preferences: { ...DEFAULT_PREFERENCES },
   talkedSites: [],
   activatedSites: [],
@@ -1361,6 +1365,7 @@ export default function Home() {
     game = useRef(fresh()),
     keys = useRef<Record<string, boolean>>({}),
     stick = useRef({ x: 0, y: 0, on: false }),
+    joystickPointer = useRef<number | null>(null),
     lookTouch = useRef({ id: -1, x: 0, y: 0 }),
     bindingsRef = useRef({ ...DEFAULT_BINDINGS }),
     listeningRef = useRef<BindingAction | null>(null),
@@ -1376,9 +1381,11 @@ export default function Home() {
     [buildMenuOpen, setBuildMenuOpen] = useState(false),
     [inventoryOpen, setInventoryOpen] = useState(false),
     [adventureOpen, setAdventureOpen] = useState(false),
+    [guideOpen, setGuideOpen] = useState(false),
     [renderPerformance, setRenderPerformance] =
       useState<RenderPerformance | null>(null),
     [pointerLocked, setPointerLocked] = useState(false),
+    [dragLookOnly, setDragLookOnly] = useState(false),
     [rankEvolution, setRankEvolution] = useState<number | null>(null),
     [bindings, setBindings] = useState({ ...DEFAULT_BINDINGS }),
     [listening, setListening] = useState<BindingAction | null>(null);
@@ -1386,6 +1393,7 @@ export default function Home() {
     () =>
       setHud({
         ...game.current,
+        tutorial: { ...game.current.tutorial, completed: [...game.current.tutorial.completed] },
         stats: { ...game.current.stats },
         inventory: (game.current.inventory || []).map((stack) => ({
           ...stack,
@@ -1452,7 +1460,9 @@ export default function Home() {
       minionOpen ||
       buildMenuOpen ||
       inventoryOpen ||
-      adventureOpen;
+      adventureOpen ||
+      guideOpen;
+    if (inventoryOpen && game.current.job && completeLesson(game.current.tutorial, 'inventory')) sync();
     if (menuOpenRef.current) {
       keys.current = {};
       stick.current = { x: 0, y: 0, on: false };
@@ -1470,6 +1480,8 @@ export default function Home() {
     buildMenuOpen,
     inventoryOpen,
     adventureOpen,
+    guideOpen,
+    sync,
   ]);
   const openScreen = (screen: GameScreen) => {
     setAdventureOpen(false);
@@ -1481,6 +1493,7 @@ export default function Home() {
     setBuildMenuOpen(screen === 'build');
     setTransferOpen(screen === 'transfer');
     setControlsOpen(screen === 'settings');
+    setGuideOpen(screen === 'guide');
   };
   const inventoryAction = (
     action: 'equip' | 'use' | 'discard' | 'exchange',
@@ -1498,6 +1511,7 @@ export default function Home() {
   };
   const setWaypoint = (target: Waypoint | null) => {
     game.current.waypoint = target;
+    if (target) completeLesson(game.current.tutorial, 'map');
     say(
       target
         ? `目的地を「${target.name}」に設定。矢印と距離を目印に歩こう。`
@@ -1612,6 +1626,7 @@ export default function Home() {
   ) => w.pendingHits.push({ target: t.id, damage, delay, knockback });
   const defeat = (w: World, t: Mob) => {
     if (t.dead) return;
+    completeLesson(w.tutorial, 'battle');
     t.dead = true;
     t.deathAnim = 1.15;
     t.hitAnim = 0.32;
@@ -1850,6 +1865,7 @@ export default function Home() {
         w.roster.push(minionFrom(mob, assignment));
     });
     w.minions = w.roster.length;
+    completeLesson(w.tutorial, 'recruit');
     if (w.minions === 1) w.achievements++;
     w.message =
       target.name +
@@ -1867,6 +1883,7 @@ export default function Home() {
       mob = w.mobs.find((candidate) => candidate.id === id);
     if (!unit) return;
     unit.assignment = assignment;
+    completeLesson(w.tutorial, 'order');
     if (mob) mob.assignment = assignment;
     w.message = `${unit.name}へ「${MINION_TASKS.find((task) => task.id === assignment)!.name}」を命令した。`;
     sync();
@@ -1922,6 +1939,7 @@ export default function Home() {
     if (['camp', 'shrine', 'vista'].includes(interaction.kind)) {
       const site = DISCOVERY_SITES.find((s) => s.id === interaction.id)!;
       if (interaction.kind === 'camp') {
+        completeLesson(w.tutorial, 'camp');
         const first = recordSiteVisit(w.talkedSites, site.id);
         if (first) {
           receiveItem(w, 'potion', 2);
@@ -1987,6 +2005,7 @@ export default function Home() {
     let n = w.nodes.find((n) => n.id === interaction.id);
     if (!n) return say('宝箱・落ちたアイテム・光る採集物へ近づいて調べよう。');
     n.n--;
+    completeLesson(w.tutorial, 'gather');
     if (n.kind === 'wood') w.wood++;
     else w.ore++;
     if (n.n === 0) receiveItem(w, n.kind === 'ore' ? 'crystal' : 'hide');
@@ -2050,6 +2069,7 @@ export default function Home() {
       );
     w.wood -= definition.wood;
     w.ore -= definition.ore;
+    completeLesson(w.tutorial, 'build');
     w.buildAnim = estimatedDuration;
     w.buildMode = false;
     w.bases.push({
@@ -2120,6 +2140,17 @@ export default function Home() {
         : '魔族ランク ' + RANKS[w.rank] + ' に昇格！';
     sync();
   };
+  const updateJoystick = (event: React.PointerEvent<HTMLDivElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = (event.clientX - rect.left - rect.width / 2) / (rect.width * 0.42);
+    const y = (event.clientY - rect.top - rect.height / 2) / (rect.height * 0.42);
+    const length = Math.max(1, Math.hypot(x, y));
+    stick.current = { x: x / length, y: y / length, on: true };
+  };
+  const releaseJoystick = () => {
+    joystickPointer.current = null;
+    stick.current = { x: 0, y: 0, on: false };
+  };
   useEffect(() => {
     const saved = localStorage.getItem('makai-key-bindings');
     if (!saved) return;
@@ -2134,6 +2165,8 @@ export default function Home() {
   useEffect(() => {
     const c = canvas.current;
     if (!c) return;
+    const mouseLook = { on: false, x: 0, y: 0 };
+    let pointerLockUnavailable = false;
     const rotateView = (dx: number, dy: number, sensitivity = 0.0022) => {
       const w = game.current;
       const preferences = w.preferences || DEFAULT_PREFERENCES;
@@ -2143,6 +2176,7 @@ export default function Home() {
           ? preferences.touchSensitivity
           : preferences.sensitivity);
       w.viewYaw -= dx * gain;
+      if (w.job) recordTutorialMotion(w.tutorial, 0, Math.abs(dx * gain));
       w.viewPitch = Math.max(
         -1.2,
         Math.min(1.2, w.viewPitch - dy * gain * (preferences.invertY ? -1 : 1)),
@@ -2212,7 +2246,15 @@ export default function Home() {
       if (menuOpenRef.current || !game.current.job) return;
       if (e.button === 0) {
         if (document.pointerLockElement !== c) {
-          void c.requestPointerLock().catch(() => undefined);
+          mouseLook.on = true;
+          mouseLook.x = e.clientX;
+          mouseLook.y = e.clientY;
+          if (!pointerLockUnavailable && c.requestPointerLock) void c.requestPointerLock().catch(() => {
+            pointerLockUnavailable = true;
+            setDragLookOnly(true);
+            game.current.message = 'この画面では視点固定が使えません。左ドラッグで見回せます。攻撃は画面下のボタンから。';
+            sync();
+          });
           return;
         }
         if (game.current.buildMode) confirmBuild();
@@ -2224,11 +2266,17 @@ export default function Home() {
       }
     };
     const mouseUp = (e: MouseEvent) => {
+      if (e.button === 0) mouseLook.on = false;
       if (e.button === 2) game.current.guarding = false;
     };
     const mouseMove = (e: MouseEvent) => {
-      if (!menuOpenRef.current && document.pointerLockElement === c)
-        rotateView(e.movementX, e.movementY);
+      if (menuOpenRef.current) return;
+      if (document.pointerLockElement === c) rotateView(e.movementX, e.movementY);
+      else if (mouseLook.on) {
+        rotateView(e.clientX - mouseLook.x, e.clientY - mouseLook.y);
+        mouseLook.x = e.clientX;
+        mouseLook.y = e.clientY;
+      }
     };
     const pointerDown = (e: PointerEvent) => {
       if (menuOpenRef.current) return;
@@ -2254,6 +2302,7 @@ export default function Home() {
     };
     const contextMenu = (e: MouseEvent) => e.preventDefault();
     const clearInput = () => {
+      mouseLook.on = false;
       keys.current = {};
       stick.current = { x: 0, y: 0, on: false };
       lookTouch.current.id = -1;
@@ -2303,6 +2352,7 @@ export default function Home() {
       frame++;
       const w = game.current;
       w.preferences ||= { ...DEFAULT_PREFERENCES };
+      w.tutorial ||= newTutorial();
       w.discoveredSites ||= [];
       w.talkedSites ||= [];
       w.activatedSites ||= [];
@@ -2343,7 +2393,7 @@ export default function Home() {
             (1 + w.stats.agility * 0.018) *
             (w.unlocked.includes('step') ? 1.15 : 1)
           : 0,
-        sprinting = held('sprint') && intent > 0.2 && w.energy > 1,
+        sprinting = (held('sprint') || (stick.current.on && Math.hypot(stick.current.x, stick.current.y) > 0.92)) && intent > 0.2 && w.energy > 1,
         sprintBoost = sprinting ? 1.58 : 1,
         actionSlow =
           w.attackAnim > 0
@@ -2356,6 +2406,7 @@ export default function Home() {
       w.facingX = Math.sin(w.viewYaw);
       w.facingY = Math.cos(w.viewYaw);
       if (w.buildMode) w.buildYaw = w.viewYaw;
+      const previousPosition = { x: w.x, y: w.y };
       Object.assign(
         w,
         moveOnGround(
@@ -2367,6 +2418,7 @@ export default function Home() {
           w.height,
         ),
       );
+      recordTutorialMotion(w.tutorial, d(w, previousPosition), 0);
       const environmentHarm = hazardDamage(w.x, w.y, w.height, w.worldTime, dt);
       if (environmentHarm > 0) {
         w.hp -= environmentHarm;
@@ -2810,6 +2862,7 @@ export default function Home() {
     interaction = nearbyInteraction(hud, hud.loot, hud.nodes),
     currentHazard = hazardAt(hud.x, hud.y),
     currentOwner = ownerOf(hud, current),
+    inCombat = !sitesIn(current.id).some(site => site.kind === 'camp' && d(hud, site) < 190) && hud.mobs.some(mob => !mob.dead && !mob.ally && d(hud, mob) < 240),
     need = hud.lv * 34,
     ready = canRank(hud),
     currentJob = JOBS.find((j) => j.id === hud.job),
@@ -2831,8 +2884,12 @@ export default function Home() {
             '--touch-inset': `${hud.preferences?.touchInset ?? 12}px`,
           } as React.CSSProperties
         }
-        className={`game-frame open-world ${hud.job ? 'playing' : 'choosing'} ${mapOpen || rankOpen || growthOpen || transferOpen || controlsOpen || minionOpen || buildMenuOpen || inventoryOpen || adventureOpen ? 'menu-visible' : ''}`}
+        className={`game-frame open-world ${hud.job ? 'playing' : 'choosing'} ${mapOpen || rankOpen || growthOpen || transferOpen || controlsOpen || minionOpen || buildMenuOpen || inventoryOpen || adventureOpen || guideOpen ? 'menu-visible' : ''}`}
       >
+        {hud.job && !hud.buildMode && !activeConstructions.length && !currentHazard && !inCombat && (
+          <TutorialHint state={hud.tutorial} onOpen={() => openScreen('guide')} onHide={() => { game.current.tutorial.hidden = true; sync(); }} />
+        )}
+        {guideOpen && <TutorialPanel state={hud.tutorial} bindings={bindings} onClose={() => setGuideOpen(false)} onToggle={() => { game.current.tutorial.hidden = !game.current.tutorial.hidden; sync(); }} />}
         {hud.job && (
           <AdventureHUD
             world={hud}
@@ -2840,9 +2897,7 @@ export default function Home() {
             rankName={RANKS[hud.rank]}
             regionName={current.name}
             owner={currentOwner}
-            inCombat={!sitesIn(current.id).some(site => site.kind === 'camp' && d(hud, site) < 190) && hud.mobs.some(
-              (mob) => !mob.dead && !mob.ally && d(hud, mob) < 240,
-            )}
+            inCombat={inCombat}
             onMenu={() => setAdventureOpen(true)}
             onMap={() => openScreen('map')}
             onInventory={() => openScreen('inventory')}
@@ -3009,7 +3064,7 @@ export default function Home() {
             {!pointerLocked && (
               <div className="fps-lock-hint">
                 <Crosshair size={13} />
-                画面をクリックして視点固定
+                {dragLookOnly ? '左ドラッグで見回す · 攻撃は下のボタン' : '画面をクリックして視点固定'}
               </div>
             )}
           </>
@@ -3660,7 +3715,7 @@ export default function Home() {
         <div className="combat-controls">
           <button className="action attack" onClick={attack}>
             <Swords />
-            <span>通常攻撃</span>
+            <span>攻撃</span>
             <kbd>左クリック</kbd>
           </button>
           <button className="action heavy" onClick={heavyAttack}>
@@ -3710,7 +3765,7 @@ export default function Home() {
           </button>
           <button className="action jump" onClick={jump}>
             <ChevronUp />
-            <span>ジャンプ</span>
+            <span>跳ぶ</span>
             <kbd>{bindingName(bindings.jump)}</kbd>
           </button>
         </div>
@@ -3751,29 +3806,23 @@ export default function Home() {
         </div>
         <div
           className="joystick"
+          role="group"
+          aria-label="移動スティック。外側でダッシュ"
           onPointerDown={(e) => {
+            if (joystickPointer.current !== null && e.currentTarget.hasPointerCapture(joystickPointer.current)) return;
+            joystickPointer.current = e.pointerId;
             (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-            stick.current.on = true;
+            updateJoystick(e);
           }}
           onPointerMove={(e) => {
-            if (!stick.current.on) return;
-            let r = e.currentTarget.getBoundingClientRect();
-            stick.current.x = Math.max(
-              -1,
-              Math.min(1, (e.clientX - r.left - r.width / 2) / (r.width / 2)),
-            );
-            stick.current.y = Math.max(
-              -1,
-              Math.min(1, (e.clientY - r.top - r.height / 2) / (r.height / 2)),
-            );
+            if (!stick.current.on || e.pointerId !== joystickPointer.current) return;
+            updateJoystick(e);
           }}
-          onPointerUp={() => (stick.current = { x: 0, y: 0, on: false })}
-          onPointerCancel={() => (stick.current = { x: 0, y: 0, on: false })}
-          onLostPointerCapture={() =>
-            (stick.current = { x: 0, y: 0, on: false })
-          }
+          onPointerUp={releaseJoystick}
+          onPointerCancel={releaseJoystick}
+          onLostPointerCapture={releaseJoystick}
         >
-          <i />
+          <i style={{ transform: `translate(${stick.current.x * 28}px, ${stick.current.y * 28}px)` }} />
         </div>
         <div className="hint">
           <Binoculars size={14} />

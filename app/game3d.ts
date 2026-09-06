@@ -11,6 +11,7 @@ import {
   campResidentAt,
 } from './world';
 import { createLandscape } from './landscape';
+import { acquireRealmTextures, textureSurface } from './realm-textures';
 import { createLootRenderer } from './loot3d';
 import { createHazardRenderer } from './hazards3d';
 import type { WorldLoot } from './items';
@@ -222,11 +223,33 @@ const geo = {
 
 const sharedGeometry = new Set<THREE.BufferGeometry>(Object.values(geo));
 const sharedMaterial = new Set<THREE.Material>(Object.values(mats));
+let graphicsOwners = 0;
+function acquireGraphics(renderer: THREE.WebGLRenderer) {
+  const lease = acquireRealmTextures(renderer.capabilities.getMaxAnisotropy());
+  for (const name of ['stone', 'stoneDark', 'stoneLight'] as const)
+    textureSurface(mats[name], lease.textures.stone, 0.035);
+  textureSurface(mats.wood, lease.textures.wood, 0.02);
+  textureSurface(mats.woodCut, lease.textures.wood, 0.012);
+  graphicsOwners++;
+  let released = false;
+  return {
+    textures: lease.textures,
+    release() {
+      if (released) return;
+      released = true;
+      lease.release();
+      if (--graphicsOwners === 0) {
+        sharedGeometry.forEach(geometry => geometry.dispose());
+        sharedMaterial.forEach(material => material.dispose());
+      }
+    },
+  };
+}
 function releaseModel(root: THREE.Object3D) {
   const geometries = new Set<THREE.BufferGeometry>(),
     materials = new Set<THREE.Material>();
   root.traverse((part) => {
-    if (!(part instanceof THREE.Mesh)) return;
+    if (!(part instanceof THREE.Mesh || part instanceof THREE.Points || part instanceof THREE.Line)) return;
     if (!sharedGeometry.has(part.geometry)) geometries.add(part.geometry);
     for (const material of Array.isArray(part.material)
       ? part.material
@@ -3331,6 +3354,8 @@ export function createGame3D(
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
   const scene = new THREE.Scene();
+  const textureLease = acquireGraphics(renderer);
+  const textures = textureLease.textures;
   const lightingStudio = new RoomEnvironment();
   const environmentGenerator = new THREE.PMREMGenerator(renderer);
   const reflectionMap = environmentGenerator.fromScene(lightingStudio, 0.04);
@@ -3372,6 +3397,8 @@ export function createGame3D(
         roughness: region.biome === '火山' ? 0.82 : 0.97,
         metalness: 0,
       });
+    groundMat.color.lerp(new THREE.Color(0xa6a2aa), 0.65);
+    textureSurface(groundMat, textures.soil, 0.035);
     const groundGeo = new THREE.PlaneGeometry(
         region.w * SCALE,
         region.h * SCALE,
@@ -3383,6 +3410,7 @@ export function createGame3D(
       const x = region.x + region.w / 2 + positions.getX(p) / SCALE,
         y = region.y + region.h / 2 - positions.getY(p) / SCALE;
       positions.setZ(p, terrainHeight(x, y));
+      groundGeo.attributes.uv.setXY(p, x * SCALE / 2.5, y * SCALE / 2.5);
     }
     groundGeo.computeVertexNormals();
     const ground = new THREE.Mesh(groundGeo, groundMat);
@@ -3418,7 +3446,7 @@ export function createGame3D(
     addLandmark(scene, region, i);
     landmarks.push(scene.children[before] as THREE.Group);
   });
-  const landscape = createLandscape(scene);
+  const landscape = createLandscape(scene, textures);
   const lootRenderer = createLootRenderer(scene);
   const hazardRenderer = createHazardRenderer(scene);
   const residents = new Map<string, { model: THREE.Group; mob: RenderMob }>();
@@ -3929,6 +3957,7 @@ export function createGame3D(
     }
   };
   const dispose = () => {
+    textureLease.release();
     reflectionMap.dispose();
     landscape.dispose();
     lootRenderer.dispose();
@@ -3941,10 +3970,10 @@ export function createGame3D(
         o instanceof THREE.Points ||
         o instanceof THREE.Line
       ) {
-        if (o.geometry) geometries.add(o.geometry);
+        if (o.geometry && !sharedGeometry.has(o.geometry)) geometries.add(o.geometry);
         const material = o.material as THREE.Material | THREE.Material[];
         (Array.isArray(material) ? material : [material]).forEach((m) =>
-          materials.add(m),
+          !sharedMaterial.has(m) && materials.add(m),
         );
       }
     });
@@ -3967,6 +3996,7 @@ export function createDemonPreview(
     powerPreference: 'high-performance',
   });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+  const textureLease = acquireGraphics(renderer);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.15;
@@ -4123,6 +4153,8 @@ export function createDemonPreview(
       canvas.removeEventListener('pointermove', move);
       canvas.removeEventListener('pointerup', up);
       canvas.removeEventListener('pointercancel', up);
+      releaseModel(scene);
+      textureLease.release();
       renderer.dispose();
     },
   };

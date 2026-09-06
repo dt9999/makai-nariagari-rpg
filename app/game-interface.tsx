@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import {
   Backpack,
+  BookOpen,
   Brain,
   Castle,
   Hammer,
@@ -23,7 +24,8 @@ export type GameScreen =
   | 'minions'
   | 'build'
   | 'transfer'
-  | 'settings';
+  | 'settings'
+  | 'guide';
 
 export function GamePanel({
   title,
@@ -56,6 +58,7 @@ export function GamePanel({
 }
 
 const SCREENS = [
+  { id: 'guide', title: '冒険の手引き', description: '移動から配下・建築まで、操作をひとつずつ練習。', Icon: BookOpen },
   {
     id: 'inventory',
     title: '持ち物・装備',

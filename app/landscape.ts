@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { textureSurface, type RealmTextures } from './realm-textures';
 import {
   DISCOVERY_SITES,
   SCALE,
@@ -19,7 +20,7 @@ const random = (n: number) => {
 };
 
 /** Bounded nearby scenery: instances share geometries/materials and unload outside the active ring. */
-export function createLandscape(scene: THREE.Scene) {
+export function createLandscape(scene: THREE.Scene, textures: RealmTextures) {
   const geometry = {
     box: new THREE.BoxGeometry(1, 1, 1),
     rock: new THREE.DodecahedronGeometry(1, 1),
@@ -62,6 +63,10 @@ export function createLandscape(scene: THREE.Scene) {
   const chunks = new Map<string, THREE.Group>(),
     sites = new Map<string, THREE.Group>(),
     dummy = new THREE.Object3D();
+  material.stone.color.set(0xb2abb6);
+  material.wood.color.set(0xc2b4a6);
+  textureSurface(material.stone, textures.stone, 0.035);
+  textureSurface(material.wood, textures.wood, 0.02);
   const put = (
     root: THREE.Object3D,
     shape: keyof typeof geometry,
@@ -78,9 +83,31 @@ export function createLandscape(scene: THREE.Scene) {
     return mesh;
   };
   const room = (root: THREE.Group, x: number, z: number) => {
-    put(root, 'box', 'wood', [4.5, 0.22, 4.6], [x, 2.9, z]);
-    const roof = put(root, 'cone', 'cloth', [3.25, 1.7, 3.25], [x, 3.6, z]);
-    roof.rotation.y = Math.PI / 4;
+    // Solid pitched roof: two weathered timber slopes, ridge and supporting rafters.
+    put(root, 'box', 'wood', [4.5, 0.16, 4.6], [x, 2.88, z]);
+    for (const side of [-1, 1]) {
+      const roof = put(root, 'box', 'wood', [2.72, 0.18, 5.1], [x + side * 1.2, 3.5, z]);
+      roof.rotation.z = -side * 0.47;
+      for (const end of [-2.38, 2.38]) {
+        const rafter = put(root, 'box', 'wood', [2.78, 0.21, 0.2], [x + side * 1.2, 3.4, z + end]);
+        rafter.rotation.z = -side * 0.47;
+      }
+      for (const end of [-2.12, 2.12]) {
+        put(root, 'box', 'wood', [0.19, 2.85, 0.19], [x + side * 1.96, 1.43, z + end]);
+        put(root, 'box', 'stone', [0.34, 0.25, 0.34], [x + side * 1.96, 0.12, z + end]);
+      }
+    }
+    put(root, 'box', 'wood', [0.23, 0.24, 5.2], [x, 4.1, z]);
+    for (const end of [-2.05, 2.05]) {
+      for (let beam = -3; beam <= 3; beam++) {
+        const height = 1.1 - Math.abs(beam) * 0.26;
+        put(root, 'box', 'wood', [0.51, height, 0.16], [x + beam * 0.53, 2.95 + height / 2, z + end]);
+      }
+      // The door remains open; jambs follow the authoritative wall's central gap.
+      for (const side of [-1, 1]) put(root, 'box', 'wood', [0.12, 2.35, 0.25], [x + side * 0.76, 1.175, z + end]);
+    }
+    put(root, 'box', 'stone', [0.6, 1.8, 0.64], [x + 1.1, 3.45, z + 1.25]);
+    put(root, 'box', 'stone', [0.78, 0.16, 0.8], [x + 1.1, 4.4, z + 1.25]);
     put(root, 'box', 'wood', [1.4, 0.12, 0.6], [x, 1, z + 0.8]);
   };
   const buildSite = (s: DiscoverySite) => {
