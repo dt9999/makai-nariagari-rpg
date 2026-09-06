@@ -1,8 +1,17 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { SCALE, worldX, worldZ, terrainHeight, regionAt } from './world';
+import {
+  SCALE,
+  worldX,
+  worldZ,
+  terrainHeight,
+  regionAt,
+  DISCOVERY_SITES,
+  campResidentAt,
+} from './world';
 import { createLandscape } from './landscape';
 import { createLootRenderer } from './loot3d';
+import { createHazardRenderer } from './hazards3d';
 import type { WorldLoot } from './items';
 
 export type RenderRegion = {
@@ -71,6 +80,7 @@ type RenderBase = {
   workers: number;
 };
 export type RenderWorld = {
+  worldTime: number;
   loot: WorldLoot[];
   x: number;
   y: number;
@@ -3275,6 +3285,8 @@ export function createGame3D(
   });
   const landscape = createLandscape(scene);
   const lootRenderer = createLootRenderer(scene);
+  const hazardRenderer = createHazardRenderer(scene);
+  const residents = new Map<string, { model: THREE.Group; mob: RenderMob }>();
   const starGeo = new THREE.BufferGeometry(),
     starPos = new Float32Array(150 * 3);
   for (let i = 0; i < 150; i++) {
@@ -3380,6 +3392,58 @@ export function createGame3D(
     const groundHeight = terrainHeight(world.x, world.y);
     camera.position.set(px, groundHeight + 1.68 + world.height + headBob, pz);
     landscape.update(world.x, world.y, elapsed, mobile ? 1600 : 2400);
+    hazardRenderer.update(
+      world.x,
+      world.y,
+      world.worldTime || 0,
+      mobile ? 900 : 1600,
+    );
+    for (const site of DISCOVERY_SITES) {
+      if (site.kind !== 'camp') continue;
+      const at = campResidentAt(site),
+        near = Math.hypot(at.x - world.x, at.y - world.y) < 1100;
+      let resident = residents.get(site.id);
+      if (!resident && near) {
+        const mob: RenderMob = {
+          id: 20000 + residents.size,
+          ...at,
+          hp: 100,
+          max: 100,
+          name: '道守り',
+          tier: 2,
+          kind:
+            site.region === 'cave'
+              ? 'golem'
+              : site.region === 'forest'
+                ? 'plant'
+                : 'imp',
+          home: site.region,
+          ally: true,
+          variant: 1,
+        };
+        const model = buildRiggedMob(mob);
+        resident = { model, mob };
+        residents.set(site.id, resident);
+        scene.add(model);
+      }
+      if (!resident) continue;
+      resident.model.visible = near;
+      if (!near) continue;
+      resident.model.position.set(
+        worldX(at.x),
+        terrainHeight(at.x, at.y),
+        worldZ(at.y),
+      );
+      animateMobRig(
+        resident.model,
+        resident.mob,
+        dt,
+        elapsed,
+        0,
+        Math.atan2(world.x - at.x, world.y - at.y),
+      );
+      (resident.model.userData.bar as THREE.Group).visible = false;
+    }
     lootRenderer.update(
       world.loot || [],
       world.x,
@@ -3653,6 +3717,7 @@ export function createGame3D(
   const dispose = () => {
     landscape.dispose();
     lootRenderer.dispose();
+    hazardRenderer.dispose();
     const geometries = new Set<THREE.BufferGeometry>(),
       materials = new Set<THREE.Material>();
     scene.traverse((o) => {

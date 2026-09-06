@@ -331,6 +331,224 @@ export const nearestSite = (x: number, y: number) =>
     Math.hypot(a.x - x, a.y - y) < Math.hypot(b.x - x, b.y - y) ? a : b,
   );
 
+export type WorldPoint = { x: number; y: number };
+export type Waypoint = WorldPoint & { id: string; name: string };
+export const headquartersOf = (r: Region): Waypoint => ({
+  id: `${r.id}-lord`,
+  name: r.landmark,
+  x: r.x + r.w * 0.68,
+  y: r.y + r.h * 0.5,
+});
+export const campResidentAt = (s: DiscoverySite): WorldPoint => ({
+  x: s.x - 70,
+  y: s.y - 120,
+});
+export function recordSiteVisit(records: string[], id: string): boolean {
+  if (
+    records.includes(id) ||
+    !DISCOVERY_SITES.some(
+      (s) => s.id === id && ['camp', 'shrine', 'vista'].includes(s.kind),
+    )
+  )
+    return false;
+  records.push(id);
+  return true;
+}
+export const CAMP_ROOMS = [
+  [-4, 1],
+  [4, 3],
+] as const;
+export type SiteWall = {
+  x: number;
+  y: number;
+  width: number;
+  depth: number;
+  height: number;
+};
+const wallCache = new Map<string, SiteWall[]>();
+/** Coordinates in simulation units, derived from the same metre-sized walls used for rendering. */
+export function wallsFor(s: DiscoverySite): SiteWall[] {
+  const cached = wallCache.get(s.id);
+  if (cached) return cached;
+  const walls: SiteWall[] = [];
+  const box = (
+    x: number,
+    z: number,
+    width: number,
+    depth: number,
+    height = 2.8,
+  ) =>
+    walls.push({
+      x: s.x + x / SCALE,
+      y: s.y + z / SCALE,
+      width: width / SCALE,
+      depth: depth / SCALE,
+      height,
+    });
+  if (s.kind === 'camp')
+    for (const [x, z] of CAMP_ROOMS) {
+      box(x - 2, z, 0.3, 4);
+      box(x + 2, z, 0.3, 4);
+      box(x, z + 2, 4, 0.25);
+      for (const side of [-1, 1]) box(x + side * 1.35, z - 2, 1.3, 0.25);
+    }
+  if (s.kind === 'cave') {
+    box(-3, 7, 1.7, 16, 4);
+    box(3, 7, 1.7, 16, 4);
+  }
+  wallCache.set(s.id, walls);
+  return walls;
+}
+export function positionBlocked(
+  x: number,
+  y: number,
+  radius = 16,
+  height = 0,
+): boolean {
+  for (const s of sitesIn(regionAt(x, y).id))
+    for (const wall of wallsFor(s)) {
+      if (height >= wall.height) continue;
+      const dx = Math.max(0, Math.abs(x - wall.x) - wall.width / 2),
+        dy = Math.max(0, Math.abs(y - wall.y) - wall.depth / 2);
+      if (dx * dx + dy * dy < radius * radius) return true;
+    }
+  return false;
+}
+/** Swept small steps prevent sprint/dodge tunnelling and allow sliding along walls. */
+export function moveOnGround(
+  from: WorldPoint,
+  to: WorldPoint,
+  height = 0,
+): WorldPoint {
+  let x = from.x,
+    y = from.y;
+  const dx = to.x - x,
+    dy = to.y - y,
+    steps = Math.max(1, Math.ceil(Math.hypot(dx, dy) / 8));
+  for (let i = 0; i < steps; i++) {
+    const nx = Math.max(20, Math.min(WORLD_WIDTH - 20, x + dx / steps));
+    if (!positionBlocked(nx, y, 16, height)) x = nx;
+    const ny = Math.max(20, Math.min(WORLD_HEIGHT - 20, y + dy / steps));
+    if (!positionBlocked(x, ny, 16, height)) y = ny;
+  }
+  return { x, y };
+}
+export type Hazard = {
+  id: string;
+  site: string;
+  region: string;
+  kind: 'poison' | 'fire' | 'arcane';
+  name: string;
+  x: number;
+  y: number;
+  radius: number;
+  damage: number;
+  phase: number;
+};
+export const HAZARDS: Hazard[] = DISCOVERY_SITES.filter((s) =>
+  ['quarry', 'cave', 'nest', 'vista'].includes(s.kind),
+).map((s, i) => {
+  const kind = (
+    ['forest', 'cave', 'village'].includes(s.region)
+      ? 'poison'
+      : ['volcano', 'citadel', 'waste'].includes(s.region)
+        ? 'fire'
+        : 'arcane'
+  ) as Hazard['kind'];
+  return {
+    id: `${s.id}-hazard`,
+    site: s.id,
+    region: s.region,
+    kind,
+    name:
+      kind === 'poison'
+        ? '毒胞子の噴気'
+        : kind === 'fire'
+          ? '灼熱の裂け目'
+          : '魔力の放電',
+    x: s.x + (s.kind === 'cave' ? 70 : 290),
+    y: s.y + (s.kind === 'cave' ? 360 : 170),
+    radius: s.kind === 'cave' ? 42 : 85,
+    damage: kind === 'fire' ? 10 : 6,
+    phase: (i % 5) * 1.3,
+  };
+});
+export const hazardPhase = (
+  hazard: Hazard,
+  time: number,
+): 'quiet' | 'warning' | 'active' => {
+  const t = (((time + hazard.phase) % 7) + 7) % 7;
+  return t < 3.5 ? 'quiet' : t < 5 ? 'warning' : 'active';
+};
+export function hazardAt(x: number, y: number): Hazard | undefined {
+  return HAZARDS.find((h) => Math.hypot(h.x - x, h.y - y) < h.radius);
+}
+export function hazardDamage(
+  x: number,
+  y: number,
+  height: number,
+  time: number,
+  dt: number,
+): number {
+  const h = hazardAt(x, y);
+  return h && height < 0.65 && hazardPhase(h, time) === 'active'
+    ? h.damage * Math.max(0, dt)
+    : 0;
+}
+export type Interaction = {
+  kind: 'loot' | 'node' | 'camp' | 'shrine' | 'vista';
+  id: string | number;
+  label: string;
+  distance: number;
+};
+export function nearbyInteraction(
+  player: WorldPoint,
+  loot: ({
+    id: number;
+    claimed: boolean;
+    chest: boolean;
+    item: string;
+  } & WorldPoint)[],
+  nodes: ({ id: number; n: number; kind: 'wood' | 'ore' } & WorldPoint)[],
+): Interaction | undefined {
+  const candidates: Interaction[] = [];
+  const add = (
+    at: WorldPoint,
+    radius: number,
+    candidate: Omit<Interaction, 'distance'>,
+  ) => {
+    const distance = Math.hypot(player.x - at.x, player.y - at.y);
+    if (distance < radius) candidates.push({ ...candidate, distance });
+  };
+  for (const l of loot)
+    if (!l.claimed)
+      add(l, 90, {
+        kind: 'loot',
+        id: l.id,
+        label: l.chest ? '宝箱を開ける' : '戦利品を拾う',
+      });
+  for (const n of nodes)
+    if (n.n > 0)
+      add(n, 75, {
+        kind: 'node',
+        id: n.id,
+        label: n.kind === 'ore' ? '瘴気鉱を採掘' : '魔木を採集',
+      });
+  for (const s of sitesIn(regionAt(player.x, player.y).id)) {
+    if (s.kind === 'camp')
+      add(campResidentAt(s), 90, {
+        kind: 'camp',
+        id: s.id,
+        label: '道守りと話す・補給',
+      });
+    if (s.kind === 'shrine')
+      add(s, 90, { kind: 'shrine', id: s.id, label: '祭壇の封印を調べる' });
+    if (s.kind === 'vista')
+      add(s, 100, { kind: 'vista', id: s.id, label: '秘境の記憶を記す' });
+  }
+  return candidates.sort((a, b) => a.distance - b.distance)[0];
+}
+
 /** Continuous terrain with soft region transitions and level foundations at destinations. */
 export function terrainHeight(x: number, y: number): number {
   const r = regionAt(x, y),
@@ -358,9 +576,16 @@ export function terrainHeight(x: number, y: number): number {
   const roadBlend = Math.min(1, Math.abs(y - roadY) / 110);
   let height = global + local * roadBlend;
   for (const site of sitesIn(r.id)) {
-    const distance = Math.hypot(x - site.x, y - site.y);
-    if (distance < 240) {
-      const t = Math.max(0, Math.min(1, (distance - 120) / 120));
+    const dx = x - site.x,
+      dy = y - site.y;
+    const distance =
+      site.kind === 'cave'
+        ? Math.hypot(dx, dy - Math.max(0, Math.min(14 / SCALE, dy)))
+        : Math.hypot(dx, dy);
+    const flatRadius =
+      site.kind === 'camp' ? 510 : site.kind === 'cave' ? 180 : 120;
+    if (distance < flatRadius + 120) {
+      const t = Math.max(0, Math.min(1, (distance - flatRadius) / 120));
       const blend = t * t * (3 - 2 * t);
       const foundation =
         1.8 * Math.sin(site.x * 0.0012) * Math.cos(site.y * 0.0011) +

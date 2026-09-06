@@ -9,6 +9,8 @@ import {
   worldZ,
   regionAt,
   type DiscoverySite,
+  CAMP_ROOMS,
+  wallsFor,
 } from './world';
 
 const random = (n: number) => {
@@ -76,11 +78,6 @@ export function createLandscape(scene: THREE.Scene) {
     return mesh;
   };
   const room = (root: THREE.Group, x: number, z: number) => {
-    put(root, 'box', 'stone', [0.3, 2.8, 4], [x - 2, 1.4, z]);
-    put(root, 'box', 'stone', [0.3, 2.8, 4], [x + 2, 1.4, z]);
-    put(root, 'box', 'wood', [4, 2.8, 0.25], [x, 1.4, z + 2]);
-    for (const side of [-1, 1])
-      put(root, 'box', 'wood', [1.3, 2.8, 0.25], [x + side * 1.35, 1.4, z - 2]);
     put(root, 'box', 'wood', [4.5, 0.22, 4.6], [x, 2.9, z]);
     const roof = put(root, 'cone', 'cloth', [3.25, 1.7, 3.25], [x, 3.6, z]);
     roof.rotation.y = Math.PI / 4;
@@ -90,8 +87,15 @@ export function createLandscape(scene: THREE.Scene) {
     const root = new THREE.Group();
     root.position.set(worldX(s.x), terrainHeight(s.x, s.y), worldZ(s.y));
     if (s.kind === 'camp') {
-      room(root, -4, 1);
-      room(root, 4, 3);
+      for (const wall of wallsFor(s))
+        put(
+          root,
+          'box',
+          wall.width > wall.depth ? 'wood' : 'stone',
+          [wall.width * SCALE, wall.height, wall.depth * SCALE],
+          [(wall.x - s.x) * SCALE, wall.height / 2, (wall.y - s.y) * SCALE],
+        );
+      for (const [x, z] of CAMP_ROOMS) room(root, x, z);
       for (let i = 0; i < 8; i++) {
         const a = (i * Math.PI) / 4;
         put(

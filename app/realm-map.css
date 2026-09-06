@@ -1,0 +1,274 @@
+.realm-map-panel {
+  width: min(1050px, calc(100vw - 24px)) !important;
+  max-width: 1050px !important;
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+  padding: 20px;
+  background: #141822;
+  color: #eee7dc;
+  border: 1px solid #827257;
+  border-radius: 12px;
+  gap: 14px;
+  font-size: 16px;
+}
+.realm-map-panel button {
+  min-height: 44px;
+  font: inherit;
+  cursor: pointer;
+  padding: 8px 12px;
+  border: 1px solid #5b5f69;
+  border-radius: 6px;
+  color: #e8ddc8;
+  background: #232a35;
+}
+.realm-map-panel button:hover,
+.realm-map-panel button[aria-pressed='true'] {
+  border-color: #e7c894;
+  background: #40392e;
+}
+.realm-map-panel button:focus-visible {
+  outline: 2px solid #ffd994;
+  outline-offset: 2px;
+}
+.realm-map-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  position: sticky;
+  top: -20px;
+  z-index: 2;
+  background: #141822;
+  padding-block: 6px;
+}
+.realm-map-heading h2 {
+  display: flex;
+  gap: 9px;
+  font-size: 22px;
+  align-items: center;
+}
+.realm-map-heading p {
+  font-size: 14px;
+  color: #b8bdc4;
+  line-height: 1.5;
+  margin-top: 6px;
+}
+.realm-map-heading > button {
+  flex-shrink: 0;
+  align-self: flex-start;
+}
+.realm-regions {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+.realm-regions button {
+  text-align: left;
+  padding: 8px;
+  font-size: 13px;
+}
+.realm-regions small,
+.realm-regions b,
+.realm-regions span {
+  display: block;
+}
+.realm-regions small {
+  font-size: 12px;
+  color: #b6aab5;
+}
+.realm-regions .own small {
+  color: #83e3be;
+}
+.realm-regions .enemy small {
+  color: #f4a4a4;
+}
+.realm-regions span {
+  font-size: 12px;
+  color: #ffe195;
+}
+.realm-map-body {
+  display: grid;
+  grid-template-columns: 1fr 1.1fr;
+  gap: 16px;
+  min-height: 0;
+}
+.realm-chart {
+  border: 1px solid #464c58;
+  border-radius: 8px;
+  background: #0a1019;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.realm-chart-caption {
+  padding: 12px;
+}
+.realm-chart-caption b,
+.realm-chart-caption span {
+  display: block;
+}
+.realm-chart-caption span {
+  font-size: 13px;
+  color: #a8b5c6;
+  margin-top: 5px;
+}
+.realm-chart svg {
+  width: 100%;
+  height: clamp(240px, 43dvh, 470px);
+  display: block;
+}
+.realm-map-legend {
+  font-size: 12px;
+  color: #c7bfae;
+  line-height: 1.6;
+  padding: 10px;
+  margin: 0;
+}
+.realm-destinations {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  max-height: 57dvh;
+  overflow: auto;
+  min-width: 0;
+  padding: 2px 5px;
+}
+.realm-destinations h3 {
+  font-size: 15px;
+  line-height: 1.5;
+  color: #e8c997;
+  margin: 0;
+}
+.realm-destinations > p {
+  font-size: 13px;
+  color: #afb7c4;
+  line-height: 1.6;
+  margin: 0 0 6px;
+}
+.realm-destinations > button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: left;
+  flex-wrap: wrap;
+  gap: 5px;
+  flex-shrink: 0;
+}
+.realm-destinations b {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 15px;
+}
+.realm-destinations span,
+.realm-destinations small {
+  display: block;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #b6becc;
+  margin-top: 3px;
+}
+.realm-destinations small {
+  flex-basis: 100%;
+}
+.realm-map-footer {
+  border-top: 1px solid #434957;
+  padding-top: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  color: #edd7b3;
+}
+.waypoint-hud {
+  position: absolute;
+  z-index: 6;
+  top: 65px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #101a25dc;
+  border: 1px solid #b8a27777;
+  border-radius: 8px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: #ffe8b5;
+  max-width: 45%;
+  pointer-events: none;
+}
+.waypoint-hud b,
+.waypoint-hud small {
+  display: block;
+}
+.waypoint-hud small {
+  font-size: 12px;
+  color: #bfcfda;
+}
+.waypoint-arrow {
+  font-size: 25px;
+  display: inline-block;
+}
+.hazard-warning {
+  position: absolute;
+  z-index: 7;
+  top: 36%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 14px;
+  background: #2a1114e8;
+  border: 1px solid #dc8b68;
+  color: #ffcea9;
+  border-radius: 8px;
+  font-size: 14px;
+  pointer-events: none;
+  max-width: 85vw;
+}
+.hazard-warning.active {
+  background: #5b2028ed;
+  border-color: #ffa37f;
+}
+@media (max-width: 700px) {
+  .realm-map-panel {
+    width: calc(100vw - 12px) !important;
+    max-height: calc(100dvh - 12px);
+    padding: 12px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+  .realm-map-heading {
+    top: -12px;
+  }
+  .realm-map-heading h2 {
+    font-size: 20px;
+  }
+  .realm-map-heading p {
+    font-size: 13px;
+  }
+  .realm-regions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .realm-map-body {
+    grid-template-columns: 1fr;
+  }
+  .realm-chart svg {
+    height: 270px;
+  }
+  .realm-destinations {
+    max-height: none;
+    overflow: visible;
+  }
+  .realm-map-footer {
+    flex-wrap: wrap;
+    font-size: 13px;
+  }
+  .waypoint-hud {
+    top: 110px;
+    max-width: calc(100% - 24px);
+    font-size: 13px;
+  }
+  .hazard-warning {
+    top: 39%;
+    font-size: 13px;
+  }
+}

@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { createDemonPreview, createGame3D } from './game3d';
 import { InventoryPanel } from './inventory-panel';
+import { RealmMap } from './realm-map';
 import './inventory.css';
 import {
   emptyEquipment,
@@ -51,6 +52,16 @@ import {
   regionAt,
   subBiomeAt,
   sitesIn,
+  headquartersOf,
+  campResidentAt,
+  nearbyInteraction,
+  moveOnGround,
+  positionBlocked,
+  hazardAt,
+  hazardDamage,
+  hazardPhase,
+  recordSiteVisit,
+  type Waypoint,
 } from './world';
 
 type Owner = 'unknown' | 'wild' | 'enemy' | 'own';
@@ -103,6 +114,7 @@ type Mob = {
   anchorX?: number;
   anchorY?: number;
   rare?: boolean;
+  patrol?: 'sentinel' | 'ambush' | 'roam';
 };
 type Node = {
   id: number;
@@ -251,6 +263,11 @@ type Career = {
   weaponLevel: number;
 };
 type World = {
+  talkedSites: string[];
+  activatedSites: string[];
+  rumoredSites: string[];
+  waypoint: Waypoint | null;
+  worldTime: number;
   inventory: InventoryStack[];
   equipment: Equipment;
   loot: WorldLoot[];
@@ -1093,6 +1110,12 @@ const spawn = (): Mob[] =>
         anchorX: x,
         anchorY: y,
         rare: i === 31,
+        patrol:
+          site.kind === 'cave'
+            ? 'ambush'
+            : site.kind === 'nest' || site.kind === 'outpost'
+              ? 'sentinel'
+              : 'roam',
         name:
           i === 31
             ? '希少種 ' + species.name
@@ -1130,6 +1153,11 @@ const baseStats = (): Stats => ({
   leadership: 1,
 });
 const fresh = (): World => ({
+  talkedSites: [],
+  activatedSites: [],
+  rumoredSites: [],
+  waypoint: null,
+  worldTime: 0,
   inventory: [
     { id: 'potion', count: 2 },
     { id: 'elixir', count: 1 },
@@ -1357,6 +1385,9 @@ export default function Home() {
         pendingHits: [...game.current.pendingHits],
         discovered: [...game.current.discovered],
         discoveredSites: [...(game.current.discoveredSites || [])],
+        talkedSites: [...(game.current.talkedSites || [])],
+        activatedSites: [...(game.current.activatedSites || [])],
+        rumoredSites: [...(game.current.rumoredSites || [])],
         conquered: [...game.current.conquered],
       }),
     [],
@@ -1404,6 +1435,14 @@ export default function Home() {
         discard: discardItem,
         exchange: exchangeItem,
       }[action](w, id),
+    );
+  };
+  const setWaypoint = (target: Waypoint | null) => {
+    game.current.waypoint = target;
+    say(
+      target
+        ? `目的地を「${target.name}」に設定。矢印と距離を目印に歩こう。`
+        : '目的地を解除した。',
     );
   };
   const targetsAhead = (w: World, range: number, cone = 0.42) =>
@@ -1648,8 +1687,14 @@ export default function Home() {
     w.energy -= 22;
     w.dodgeCd = 0.82;
     w.dodgeTime = 0.48;
-    w.x = Math.max(30, Math.min(WORLD_WIDTH - 30, w.x + w.facingX * 95));
-    w.y = Math.max(30, Math.min(WORLD_HEIGHT - 30, w.y + w.facingY * 95));
+    Object.assign(
+      w,
+      moveOnGround(
+        w,
+        { x: w.x + w.facingX * 95, y: w.y + w.facingY * 95 },
+        w.height,
+      ),
+    );
     w.message = '回避！ 身を沈めて攻撃をすり抜けた。';
     sync();
   };
@@ -1803,9 +1848,65 @@ export default function Home() {
   const gather = () => {
     let w = game.current;
     if (!w.job) return say('先に職業を選択しよう。');
-    const loot = w.loot
-      .filter((item) => !item.claimed && d(w, item) < 90)
-      .sort((a, b) => d(w, a) - d(w, b))[0];
+    const interaction = nearbyInteraction(w, w.loot, w.nodes);
+    if (!interaction)
+      return say(
+        '調べられる対象に近づこう。集落の道守り、祭壇、宝箱、採集物を探せる。',
+      );
+    if (['camp', 'shrine', 'vista'].includes(interaction.kind)) {
+      const site = DISCOVERY_SITES.find((s) => s.id === interaction.id)!;
+      if (interaction.kind === 'camp') {
+        const first = recordSiteVisit(w.talkedSites, site.id);
+        if (first) {
+          receiveItem(w, 'potion', 2);
+          receiveItem(w, 'wood', 3);
+          receiveItem(w, 'ore', 3);
+        }
+        w.hp = w.maxHp;
+        w.energy = w.maxEnergy;
+        const clues = sitesIn(site.region).filter((s) =>
+          ['quarry', 'outpost'].includes(s.kind),
+        );
+        for (const clue of clues)
+          if (!w.rumoredSites.includes(clue.id)) w.rumoredSites.push(clue.id);
+        const target =
+          clues.find((s) => !w.discoveredSites.includes(s.id)) ||
+          headquartersOf(regionAt(site.x, site.y));
+        w.waypoint = {
+          id: target.id,
+          name: target.name,
+          x: target.x,
+          y: target.y,
+        };
+        return say(
+          `道守り「${first ? '旅支度に薬と資材を持っていけ。' : 'ここで傷を癒やしていけ。'}資源地を調べ、前線基地を構えてから領主へ向かうといい」— 地図に情報を記録。`,
+        );
+      }
+      if (w.activatedSites.includes(site.id))
+        return say('この場所の記憶はすでに持ち帰った。');
+      if (
+        interaction.kind === 'shrine' &&
+        w.mobs.some((m) => !m.ally && !m.dead && d(m, site) < 220)
+      )
+        return say('祭壇を守る魔物がいる。先に周囲の敵を倒そう。');
+      recordSiteVisit(w.activatedSites, site.id);
+      w.achievements++;
+      gain(interaction.kind === 'vista' ? 30 : 45);
+      const reward =
+        interaction.kind === 'vista'
+          ? 'crown-relic'
+          : REGIONS.findIndex((r) => r.id === site.region) >= 5
+            ? 'abyss-relic'
+            : 'moon-gem';
+      receiveItem(w, reward);
+      return say(
+        `${site.name}の${interaction.kind === 'vista' ? '記憶を記した' : '封印を解いた'}。${itemOf(reward).name}を獲得！`,
+      );
+    }
+    const loot =
+      interaction.kind === 'loot'
+        ? w.loot.find((item) => item.id === interaction.id)
+        : undefined;
     if (loot) {
       receiveItem(w, loot.item, loot.count);
       loot.claimed = true;
@@ -1817,7 +1918,7 @@ export default function Home() {
         `${loot.chest ? '宝箱を開けた。' : '拾得：'}${itemOf(loot.item).name} ×${loot.count} — 持ち物で確認できる。`,
       );
     }
-    let n = w.nodes.find((n) => n.n && d(w, n) < 75);
+    let n = w.nodes.find((n) => n.id === interaction.id);
     if (!n) return say('宝箱・落ちたアイテム・光る採集物へ近づいて調べよう。');
     n.n--;
     if (n.kind === 'wood') w.wood++;
@@ -1863,6 +1964,15 @@ export default function Home() {
       w.buildMode = false;
       return say('建築中に必要素材が不足した。');
     }
+    const buildAt = {
+      x: Math.max(100, Math.min(WORLD_WIDTH - 100, w.x + w.facingX * 320)),
+      y: Math.max(100, Math.min(WORLD_HEIGHT - 100, w.y + w.facingY * 320)),
+    };
+    if (
+      positionBlocked(buildAt.x, buildAt.y, 100) ||
+      hazardAt(buildAt.x, buildAt.y)
+    )
+      return say('ここには壁や危険地帯がある。別の予定地を選ぼう。');
     const builders = w.roster.filter((unit) => unit.assignment === 'build'),
       builderPower = builders.reduce(
         (total, unit) => total + unit.aptitudes.build,
@@ -1897,7 +2007,7 @@ export default function Home() {
       r = regionAt(w.x, w.y);
     if (ownerOf(w, r) !== 'enemy')
       return say('敵領土のランドマーク付近で領土ボスを呼び出せる。');
-    const headquarters = { x: r.x + r.w * 0.68, y: r.y + r.h * 0.5 };
+    const headquarters = headquartersOf(r);
     if (d(w, headquarters) > 620)
       return say(
         '領主の本拠地はまだ遠い。敵領土を偵察し、巨大建造物を目指そう。',
@@ -2083,6 +2193,10 @@ export default function Home() {
       frame++;
       const w = game.current;
       w.discoveredSites ||= [];
+      w.talkedSites ||= [];
+      w.activatedSites ||= [];
+      w.rumoredSites ||= [];
+      w.worldTime ||= 0;
       w.inventory ||= [];
       w.equipment ||= emptyEquipment();
       w.loot ||= [];
@@ -2092,6 +2206,7 @@ export default function Home() {
         id = requestAnimationFrame(loop);
         return;
       }
+      w.worldTime += dt;
       const held = (action: BindingAction) =>
         !!keys.current[bindingsRef.current[action]];
       const strafe =
@@ -2130,20 +2245,22 @@ export default function Home() {
       w.facingX = Math.sin(w.viewYaw);
       w.facingY = Math.cos(w.viewYaw);
       if (w.buildMode) w.buildYaw = w.viewYaw;
-      w.x = Math.max(
-        30,
-        Math.min(
-          WORLD_WIDTH - 30,
-          w.x + directionX * move * sprintBoost * intent * dt * actionSlow,
+      Object.assign(
+        w,
+        moveOnGround(
+          w,
+          {
+            x: w.x + directionX * move * sprintBoost * intent * dt * actionSlow,
+            y: w.y + directionY * move * sprintBoost * intent * dt * actionSlow,
+          },
+          w.height,
         ),
       );
-      w.y = Math.max(
-        30,
-        Math.min(
-          WORLD_HEIGHT - 30,
-          w.y + directionY * move * sprintBoost * intent * dt * actionSlow,
-        ),
-      );
+      const environmentHarm = hazardDamage(w.x, w.y, w.height, w.worldTime, dt);
+      if (environmentHarm > 0) {
+        w.hp -= environmentHarm;
+        w.hitAnim = 0.15;
+      }
       if (sprinting) w.energy = Math.max(0, w.energy - 17 * dt);
       if (!w.grounded) {
         w.velocityY -= 15.5 * dt;
@@ -2307,6 +2424,9 @@ export default function Home() {
           w.maxHp,
           w.hp + Math.max(1, Math.floor(w.stats.stamina * 0.45)),
         );
+      const safeCamp = sitesIn(r.id).some(
+        (site) => site.kind === 'camp' && d(w, site) < 190,
+      );
       w.mobs.forEach((m) => {
         m.attackCd = Math.max(0, (m.attackCd || 0) - dt);
         m.hitAnim = Math.max(0, (m.hitAnim || 0) - dt);
@@ -2318,7 +2438,15 @@ export default function Home() {
         const behavior = behaviorOf(m),
           q = d(w, m) || 1,
           reach = behavior.reach * (m.boss ? 2.35 : 1),
-          detect = behavior.detect * (m.boss ? 1.55 : 1);
+          detect =
+            behavior.detect *
+            (m.boss
+              ? 1.55
+              : m.patrol === 'ambush'
+                ? 0.48
+                : m.patrol === 'sentinel'
+                  ? 0.8
+                  : 1);
         let target: Mob | undefined;
         if (m.ally) {
           const assignment =
@@ -2396,7 +2524,17 @@ export default function Home() {
             }
           }
         } else {
-          if (q < detect && q > reach && !(m.attackAnim || 0)) {
+          const inTerritory =
+            m.boss ||
+            Math.hypot(m.x - (m.anchorX || m.x), m.y - (m.anchorY || m.y)) <
+              700;
+          if (
+            !safeCamp &&
+            inTerritory &&
+            q < detect &&
+            q > reach &&
+            !(m.attackAnim || 0)
+          ) {
             const chaseSpeed = behavior.speed * (m.boss ? 0.78 : 1),
               strafe =
                 m.kind === 'insect' || m.kind === 'flying'
@@ -2408,20 +2546,27 @@ export default function Home() {
             m.y +=
               (((w.y - m.y) / q) * chaseSpeed - ((w.x - m.x) / q) * strafe) *
               dt;
-          } else if (q <= reach && (m.attackCd || 0) <= 0) {
+          } else if (
+            !safeCamp &&
+            inTerritory &&
+            q <= reach &&
+            (m.attackCd || 0) <= 0
+          ) {
             m.attackTotal = behavior.attack * (m.boss ? 1.18 : 1);
             m.attackAnim = m.attackTotal;
             m.attackCd = behavior.cooldown * (m.boss ? 1.12 : 1);
             m.attackHit = false;
           } else if (
-            q >= detect &&
+            (q >= detect || !inTerritory || safeCamp) &&
             behavior.wander > 0 &&
             !(m.attackAnim || 0)
           ) {
             const home = REGIONS.find((region) => region.id === m.home),
               angle = now * 0.00022 * (1 + behavior.wander / 20) + m.id * 1.71;
-            const tx = (m.anchorX ?? m.x) + Math.cos(angle) * 100,
-              ty = (m.anchorY ?? m.y) + Math.sin(angle * 0.83) * 100,
+            const patrolRadius =
+                m.patrol === 'ambush' ? 8 : m.patrol === 'sentinel' ? 60 : 100,
+              tx = (m.anchorX ?? m.x) + Math.cos(angle) * patrolRadius,
+              ty = (m.anchorY ?? m.y) + Math.sin(angle * 0.83) * patrolRadius,
               distance = Math.hypot(tx - m.x, ty - m.y) || 1;
             m.x += ((tx - m.x) / distance) * behavior.wander * dt;
             m.y += ((ty - m.y) / distance) * behavior.wander * dt;
@@ -2473,7 +2618,7 @@ export default function Home() {
                 victim.hitAnim = 0.3;
                 if (victim.hp <= 0) defeat(w, victim);
               }
-            } else if (d(w, m) < reach + 28 && w.dodgeTime <= 0) {
+            } else if (!safeCamp && d(w, m) < reach + 28 && w.dodgeTime <= 0) {
               let branchGuard =
                   1 - w.unlocked.filter((s) => s.endsWith('b')).length * 0.08,
                 harm = Math.max(
@@ -2548,10 +2693,8 @@ export default function Home() {
     return () => clearTimeout(timeout);
   }, [rankEvolution]);
   const current = regionAt(hud.x, hud.y),
-    nearbyLoot = hud.loot
-      .filter((loot) => !loot.claimed && d(hud, loot) < 90)
-      .sort((a, b) => d(hud, a) - d(hud, b))[0],
-    nearbyNode = hud.nodes.find((node) => node.n > 0 && d(hud, node) < 75),
+    interaction = nearbyInteraction(hud, hud.loot, hud.nodes),
+    currentHazard = hazardAt(hud.x, hud.y),
     currentOwner = ownerOf(hud, current),
     need = hud.lv * 34,
     ready = canRank(hud),
@@ -2583,16 +2726,41 @@ export default function Home() {
             持ち物 <kbd>{bindingName(bindings.inventory)}</kbd>
           </button>
         )}
-        {hud.job && !inventoryOpen && (nearbyLoot || nearbyNode) && (
+        {hud.job && !inventoryOpen && interaction && (
           <div className="interaction-prompt">
             <kbd>{bindingName(bindings.gather)}</kbd>
-            {nearbyLoot
-              ? nearbyLoot.chest
-                ? '宝箱を開ける'
-                : itemOf(nearbyLoot.item).name + 'を拾う'
-              : nearbyNode?.kind === 'ore'
-                ? '瘴気鉱を採掘'
-                : '魔木を採集'}
+            {interaction.label}
+          </div>
+        )}
+        {hud.job && hud.waypoint && (
+          <div className="waypoint-hud">
+            <span
+              className="waypoint-arrow"
+              style={{
+                transform: `rotate(${((Math.atan2(hud.waypoint.x - hud.x, hud.waypoint.y - hud.y) - hud.viewYaw) * 180) / Math.PI}deg)`,
+              }}
+            >
+              ↑
+            </span>
+            <div>
+              <b>{hud.waypoint.name}</b>
+              <small>
+                {Math.round(d(hud, hud.waypoint) * 0.018)} m ·{' '}
+                {d(hud, hud.waypoint) < 100 ? '目的地付近' : '目的地'}
+              </small>
+            </div>
+          </div>
+        )}
+        {hud.job && currentHazard && (
+          <div
+            className={`hazard-warning ${hazardPhase(currentHazard, hud.worldTime)}`}
+          >
+            {currentHazard.name} —{' '}
+            {hazardPhase(currentHazard, hud.worldTime) === 'active'
+              ? '危険！ 範囲の外へ'
+              : hazardPhase(currentHazard, hud.worldTime) === 'warning'
+                ? 'まもなく噴出。離れよう'
+                : '今は静かだ。立ち止まらず進もう'}
           </div>
         )}
         <header className="topbar">
@@ -2814,81 +2982,12 @@ export default function Home() {
             </small>
           </div>
         )}
-        {mapOpen && (
-          <div className="world-map">
-            <div className="panel-head">
-              <div>
-                <Map size={18} />
-                <b>魔界広域図</b>
-              </div>
-              <button onClick={() => setMapOpen(false)}>×</button>
-            </div>
-            <div className="map-grid">
-              {REGIONS.map((r) => {
-                let seen = hud.discovered.includes(r.id),
-                  here = r.id === current.id,
-                  territory = ownerOf(hud, r);
-                return (
-                  <div
-                    key={r.id}
-                    className={
-                      'map-cell ' +
-                      (seen ? territory : 'unknown') +
-                      (here ? ' here' : '')
-                    }
-                  >
-                    <span>{seen ? r.biome : '未探索'}</span>
-                    <b>{seen ? r.name : '？？？'}</b>
-                    {here && <i>現在地</i>}
-                  </div>
-                );
-              })}
-            </div>
-            <div className="map-legend">
-              <span>
-                <i className="own" />
-                自領
-              </span>
-              <span>
-                <i className="enemy" />
-                敵領
-              </span>
-              <span>
-                <i className="wild" />
-                未支配
-              </span>
-              <span>
-                <i className="unknown" />
-                未探索
-              </span>
-            </div>
-            <div className="discovery-map-list">
-              <h3>{current.name} — 発見地点</h3>
-              {sitesIn(current.id).map((site) => (
-                <div
-                  key={site.id}
-                  className={
-                    hud.discoveredSites.includes(site.id) ? 'seen' : ''
-                  }
-                >
-                  <b>
-                    {hud.discoveredSites.includes(site.id)
-                      ? site.name
-                      : '未探索の' + SITE_LABELS[site.kind]}
-                  </b>
-                  <span>
-                    {SITE_LABELS[site.kind]} ·{' '}
-                    {Math.round(d(hud, site) * 0.018)} m
-                  </span>
-                </div>
-              ))}
-              <small>
-                全域 {hud.discoveredSites.length} / {DISCOVERY_SITES.length}{' '}
-                地点発見
-              </small>
-            </div>
-          </div>
-        )}
+        <RealmMap
+          world={hud}
+          open={mapOpen}
+          onOpenChange={setMapOpen}
+          onWaypoint={setWaypoint}
+        />
         {rankOpen && (
           <div
             className={
