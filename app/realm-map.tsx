@@ -91,6 +91,11 @@ export function RealmMap({
           </div>
           <DialogClose aria-label="地図を閉じる">閉じる</DialogClose>
         </header>
+        <label className="realm-mobile-select">表示する領土
+          <select value={region.id} onChange={(event) => setSelected(event.target.value)}>
+            {REGIONS.map((r, i) => <option key={r.id} value={r.id}>{i + 1}. {world.discovered.includes(r.id) ? r.name : '未知の領土'}{r.id === current.id ? '（現在地）' : ''}</option>)}
+          </select>
+        </label>
         <nav className="realm-regions" aria-label="表示する領土">
           {REGIONS.map((r, i) => {
             const seen = world.discovered.includes(r.id),

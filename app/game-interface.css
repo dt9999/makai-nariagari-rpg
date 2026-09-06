@@ -1,0 +1,1056 @@
+/* The playfield owns the viewport; menus own their scrolling. */
+.immersive-shell {
+  display: block;
+  padding: 0;
+  width: 100%;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  background: #0b1018;
+}
+.immersive-shell .game-frame {
+  width: 100%;
+  height: 100dvh;
+  min-height: 0;
+  max-height: none;
+  aspect-ratio: auto;
+  border: 0;
+  border-radius: 0;
+  overflow: hidden;
+}
+.immersive-shell .game-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+.immersive-shell .legend,
+.immersive-shell .topbar,
+.immersive-shell .hud-left,
+.immersive-shell .hud-right,
+.immersive-shell .inventory-toggle,
+.immersive-shell .map-toggle,
+.immersive-shell .growth-toggle,
+.immersive-shell .transfer-toggle,
+.immersive-shell .controls-toggle,
+.immersive-shell .quest-card,
+.immersive-shell .resources,
+.immersive-shell .hint,
+.immersive-shell .utility-controls button:nth-child(n + 3) {
+  display: none;
+}
+.immersive-shell .choosing > :not(.game-canvas):not(.job-select),
+.immersive-shell .menu-visible > :not(.game-canvas):not([data-slot]) {
+  visibility: hidden;
+}
+.immersive-shell button,
+.game-panel button {
+  touch-action: manipulation;
+}
+.immersive-shell button:focus-visible,
+.game-panel button:focus-visible,
+.game-panel select:focus-visible {
+  outline: 2px solid #ffda93;
+  outline-offset: 3px;
+}
+.adventure-vitals {
+  position: absolute;
+  z-index: 7;
+  top: max(16px, env(safe-area-inset-top));
+  left: max(16px, env(safe-area-inset-left));
+  width: 300px;
+  padding: 8px 12px;
+  border-left: 2px solid #b5a27f;
+  background: linear-gradient(90deg, #0c131deb, #0c131d70);
+  color: #faf0dc;
+  font-size: 14px;
+  pointer-events: none;
+}
+.adventure-vitals.in-combat {
+  border-color: #e77566;
+}
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+}
+.identity button {
+  width: 44px;
+  height: 44px;
+  border: 1px solid #b5a27f88;
+  border-radius: 6px;
+  background: #26303b;
+  color: #ffda93;
+  font: bold 22px Georgia;
+  pointer-events: auto;
+}
+.identity span {
+  flex: 1;
+}
+.identity b {
+  font-weight: 500;
+}
+.identity em {
+  color: #ffb7a7;
+  font-size: 12px;
+  font-style: normal;
+}
+.vital-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  height: 19px;
+  font-variant-numeric: tabular-nums;
+}
+.vital-row > span {
+  font-size: 11px;
+  width: 19px;
+  color: #b5c0c8;
+}
+.vital-row > b {
+  font-size: 12px;
+  min-width: 70px;
+  text-align: right;
+}
+.vital-row small {
+  font-size: 11px;
+  color: #bcc5cd;
+}
+.vital-row meter {
+  appearance: none;
+  flex: 1;
+  min-width: 0;
+  height: 7px;
+  border: 0;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #343840;
+}
+.vital-row meter::-webkit-meter-bar {
+  background: #343840;
+  border: 0;
+}
+.vital-row meter::-webkit-meter-optimum-value {
+  background: linear-gradient(90deg, #b93f48, #ed8b75);
+}
+.vital-row meter::-moz-meter-bar {
+  background: #ed8b75;
+}
+.vital-row.stamina meter::-webkit-meter-optimum-value {
+  background: linear-gradient(90deg, #479f91, #a0d8c1);
+}
+.vital-row.stamina meter::-moz-meter-bar {
+  background: #a0d8c1;
+}
+.adventure-nav {
+  position: absolute;
+  z-index: 8;
+  right: max(16px, env(safe-area-inset-right));
+  top: max(16px, env(safe-area-inset-top));
+  display: flex;
+  gap: 8px;
+}
+.adventure-nav button {
+  position: relative;
+  width: 68px;
+  height: 60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: #f2e9d6;
+  background: #101923dc;
+  border: 1px solid #b5a27f77;
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.adventure-nav svg {
+  width: 19px;
+  height: 19px;
+}
+.adventure-nav i {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ffd485;
+}
+.adventure-location {
+  position: absolute;
+  z-index: 6;
+  top: 126px;
+  left: max(18px, env(safe-area-inset-left));
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  max-width: calc(100% - 36px);
+  color: #ede7d7;
+  font-size: 13px;
+  text-shadow: 0 1px 4px #000;
+  pointer-events: none;
+}
+.adventure-location svg {
+  width: 15px;
+  height: 15px;
+}
+.adventure-location b {
+  padding: 3px 7px;
+  border-radius: 4px;
+  background: #17493e;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.adventure-location.enemy b {
+  background: #7b2636;
+}
+.immersive-shell .waypoint-hud {
+  top: max(22px, env(safe-area-inset-top));
+  max-width: calc(100% - 690px);
+  min-width: 160px;
+  padding: 8px 12px;
+  font-size: 14px;
+}
+.immersive-shell .waypoint-hud b {
+  font-size: 14px;
+}
+.immersive-shell .waypoint-hud small {
+  font-size: 12px;
+}
+.immersive-shell .combat-controls {
+  bottom: max(20px, env(safe-area-inset-bottom));
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  display: grid;
+  grid-template-columns: repeat(6, 82px);
+  gap: 7px;
+}
+.immersive-shell .combat-controls .action {
+  min-width: 0;
+  width: 82px;
+  min-height: 72px;
+  height: auto;
+  padding: 7px 4px;
+  border-radius: 8px;
+  background: #101923da;
+  border: 1px solid #b5a27f66;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.immersive-shell .action span {
+  font-size: 12px;
+}
+.immersive-shell .action kbd {
+  display: block;
+  font-size: 10px;
+  color: #bdc7cf;
+}
+.immersive-shell .action svg {
+  width: 20px;
+  height: 20px;
+}
+.immersive-shell .combat-controls .attack {
+  border-color: #d6b785;
+  background: #473123d9;
+}
+.immersive-shell .combat-controls .guard.active {
+  background: #245979;
+  border-color: #ace5ff;
+}
+.immersive-shell .utility-controls {
+  left: max(16px, env(safe-area-inset-left));
+  bottom: max(20px, env(safe-area-inset-bottom));
+  display: flex;
+  gap: 8px;
+}
+.immersive-shell .utility-controls button {
+  min-width: 88px;
+  min-height: 48px;
+  padding: 8px;
+  font-size: 13px;
+  gap: 5px;
+  background: #101923da;
+  border-color: #b5a27f66;
+}
+.immersive-shell .utility-controls svg {
+  width: 17px;
+  height: 17px;
+}
+.immersive-shell .utility-controls kbd {
+  font-size: 11px;
+}
+.immersive-shell .notice {
+  bottom: 130px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  min-width: 0;
+  max-width: min(640px, calc(100% - 32px));
+  max-height: 92px;
+  overflow: auto;
+  padding: 10px 16px;
+  font-size: 14px;
+  line-height: 1.6;
+  text-align: center;
+  background: #0c141fe3;
+  border: 1px solid #b5a27f66;
+  border-radius: 6px;
+  pointer-events: none;
+}
+.immersive-shell .interaction-prompt {
+  top: 59%;
+  bottom: auto;
+  max-width: calc(100% - 32px);
+  font-size: 14px;
+  padding: 10px 14px;
+}
+.immersive-shell .interaction-prompt kbd {
+  font-size: 13px;
+}
+.immersive-shell .fps-lock-hint {
+  top: auto;
+  bottom: 102px;
+  font-size: 12px;
+  padding: 5px 10px;
+}
+.immersive-shell .construction-status {
+  top: 165px;
+  left: max(16px, env(safe-area-inset-left));
+  transform: none;
+  width: 245px;
+}
+.immersive-shell .construction-status span {
+  font-size: 13px;
+}
+.immersive-shell .construction-status small {
+  font-size: 11px;
+}
+.immersive-shell .build-placement {
+  top: 180px;
+  max-width: calc(100% - 32px);
+}
+.immersive-shell .build-placement b {
+  font-size: 15px;
+}
+.immersive-shell .build-placement span {
+  font-size: 12px;
+}
+.immersive-shell .build-placement button {
+  min-height: 44px;
+  min-width: 64px;
+  padding: 8px;
+  border: 1px solid #9adcc3;
+  border-radius: 5px;
+}
+.immersive-shell .territory-banner {
+  top: 29%;
+  pointer-events: none;
+}
+.immersive-shell .territory-banner b {
+  font-size: 14px;
+}
+.immersive-shell .hazard-warning {
+  top: 39%;
+  max-width: calc(100% - 28px);
+  font-size: 14px;
+}
+.immersive-shell .joystick {
+  display: none;
+}
+
+/* Shared, focus-trapped panels replace the old absolute-position overlays. */
+.game-panel.game-panel {
+  position: fixed;
+  z-index: 60;
+  display: block;
+  inset: auto;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  translate: none;
+  width: min(960px, calc(100vw - 32px));
+  max-width: none;
+  max-height: calc(100dvh - 32px);
+  padding: 0 22px 22px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  border: 1px solid #b5a27f88;
+  border-radius: 12px;
+  background: #131b26;
+  color: #f2e9dc;
+  font-size: 15px;
+  line-height: 1.5;
+  box-shadow: 0 24px 90px #000b;
+}
+.game-panel.game-panel::before {
+  display: none;
+}
+.game-panel .panel-head {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  margin: 0 -1px 18px;
+  padding: 16px 0;
+  gap: 12px;
+  background: #131b2afa;
+  border-bottom: 1px solid #b5a27f44;
+}
+.game-panel .panel-head > div {
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+.game-panel .panel-head b {
+  font-size: 20px;
+}
+.game-panel .panel-head > div span {
+  font-size: 13px;
+  color: #b6c3ce;
+}
+.game-panel .panel-head button {
+  flex-shrink: 0;
+  min-width: 64px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid #8395a166;
+  border-radius: 6px;
+  font-size: 14px;
+  background: #222f3b;
+  color: #fff3db;
+}
+.game-panel button,
+.game-panel select {
+  min-height: 44px;
+  cursor: pointer;
+}
+.game-panel button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.game-panel :is(small, em),
+.game-panel .binding-grid kbd {
+  font-size: 13px;
+  line-height: 1.55;
+}
+.game-panel :is(p, label),
+.game-panel .binding-grid span,
+.game-panel .preserved b {
+  font-size: 14px;
+}
+.game-panel :is(h3),
+.game-panel .minion-id b,
+.game-panel .stat-row > div b {
+  font-size: 16px;
+}
+.game-panel .stat-row {
+  grid-template-columns: minmax(0, 1fr) 32px 44px;
+  padding: 8px;
+}
+.game-panel .stat-row button {
+  width: 44px;
+  height: 44px;
+}
+.game-panel .stat-row > div small {
+  font-size: 12px;
+  color: #b8bbc9;
+}
+.game-panel .growth-columns {
+  grid-template-columns: 1fr 1fr;
+}
+.game-panel .sp-wallet {
+  flex-wrap: wrap;
+}
+.game-panel .sp-wallet span {
+  font-size: 14px;
+}
+.game-panel .sp-wallet small {
+  margin-left: 0;
+}
+.game-panel .weapon-card {
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+}
+.game-panel .weapon-card span {
+  font-size: 12px;
+}
+.game-panel .weapon-card b {
+  font-size: 15px;
+}
+.game-panel .weapon-card button {
+  font-size: 14px;
+}
+.game-panel .skill-tree div span {
+  font-size: 12px;
+}
+.game-panel .skill-tree div b {
+  font-size: 15px;
+}
+.game-panel .skill-tree div small {
+  font-size: 12px;
+}
+.game-panel .skill-tree em {
+  font-size: 13px;
+}
+.game-panel .skill-tree > button {
+  grid-template-columns: 28px minmax(0, 1fr) 48px;
+  color: #d0c7d3;
+}
+.game-panel .job-doctrine b {
+  font-size: 14px;
+}
+.game-panel .job-doctrine span {
+  font-size: 12px;
+}
+.game-panel .milestones > p {
+  font-size: 13px;
+}
+.game-panel .milestone-group {
+  grid-template-columns: 54px minmax(0, 1fr);
+}
+.game-panel .milestone-group button > span {
+  font-size: 12px;
+}
+.game-panel .milestone-group button > b {
+  font-size: 15px;
+}
+.game-panel .milestone-group button > small {
+  font-size: 13px;
+}
+.game-panel .milestone-group > strong {
+  font-size: 14px;
+}
+.game-panel .career-card > div :is(span, small),
+.game-panel .building-grid > button div :is(span, small) {
+  font-size: 13px;
+  height: auto;
+  color: #bbc2ce;
+}
+.game-panel .career-card > div b,
+.game-panel .building-grid > button div b {
+  font-size: 18px;
+  margin: 6px 0;
+}
+.game-panel .career-card strong,
+.game-panel .building-grid > button strong {
+  font-size: 14px;
+}
+.game-panel .career-card em,
+.game-panel .building-grid > button em {
+  font-size: 12px;
+}
+.game-panel .career-card,
+.game-panel .building-grid > button {
+  padding: 14px;
+  min-height: 170px;
+}
+.game-panel .preserved span,
+.game-panel .build-wallet span {
+  font-size: 13px;
+}
+.game-panel .building-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.game-panel .task-summary {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+.game-panel .task-summary span {
+  font-size: 14px;
+}
+.game-panel .task-summary small {
+  font-size: 11px;
+}
+.game-panel .task-summary b {
+  font-size: 20px;
+}
+.game-panel .roster-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.game-panel .roster-grid select {
+  min-width: 0;
+  font-size: 14px;
+}
+.game-panel .minion-id span,
+.game-panel .aptitudes span {
+  font-size: 12px;
+}
+.game-panel .rank-showcase {
+  grid-template-columns: 1fr 1fr;
+}
+.game-panel .rank-showcase p {
+  font-size: 14px;
+}
+.game-panel .rank-showcase :is(small, span) {
+  font-size: 12px;
+}
+.game-panel .rank-stats span {
+  font-size: 14px;
+  padding: 10px;
+}
+.game-panel .rank-track span {
+  font-size: 14px;
+}
+.game-panel .rank-up {
+  font-size: 16px;
+}
+.realm-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-bottom: 20px;
+  color: #b6c3ce;
+  font-size: 14px;
+}
+.realm-summary b {
+  color: #f4d49d;
+  margin-left: 5px;
+}
+.adventure-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.adventure-grid button {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  text-align: left;
+  border: 1px solid #8c9ba244;
+  border-radius: 8px;
+  background: #1e2a36;
+  color: #e7ddd0;
+}
+.adventure-grid button:hover {
+  border-color: #d0b47e;
+  background: #293542;
+}
+.adventure-grid svg {
+  flex-shrink: 0;
+  color: #d5b684;
+  width: 24px;
+  height: 24px;
+}
+.adventure-grid b {
+  display: block;
+  font-size: 17px;
+}
+.adventure-grid span {
+  display: block;
+  font-size: 13px;
+  color: #b6c3ce;
+  margin-top: 4px;
+}
+.menu-help {
+  color: #b6c3ce;
+  margin-top: 20px;
+}
+.restart-section {
+  margin-top: 22px;
+  border-top: 1px solid #8c9ba244;
+  padding-top: 10px;
+}
+.restart-section summary {
+  min-height: 44px;
+  padding: 10px 0;
+  font-size: 14px;
+  cursor: pointer;
+  color: #c4a6a3;
+}
+.restart-section button {
+  background: #5b2835;
+  border: 1px solid #df9e91;
+  padding: 10px;
+  border-radius: 6px;
+}
+.territory-challenge {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #bc927c88;
+  border-radius: 7px;
+  background: #392830;
+  color: #ffe2bb;
+}
+.territory-challenge svg {
+  width: 20px;
+}
+.territory-challenge span {
+  font-size: 13px;
+  color: #cbb7b5;
+}
+.immersive-shell .job-select {
+  padding: max(30px, env(safe-area-inset-top))
+    max(24px, env(safe-area-inset-right)) max(30px, env(safe-area-inset-bottom));
+}
+.immersive-shell .job-title p {
+  font-size: 15px;
+}
+.immersive-shell .job-title > span {
+  font-size: 12px;
+}
+.immersive-shell .job-card {
+  min-height: 200px;
+}
+.immersive-shell .job-card > span {
+  font-size: 13px;
+}
+.immersive-shell .job-card h2 {
+  font-size: 24px;
+}
+.immersive-shell .job-card p {
+  font-size: 14px;
+  height: auto;
+  min-height: 42px;
+}
+.immersive-shell .job-card > small {
+  font-size: 11px;
+}
+.immersive-shell .job-card > b {
+  font-size: 14px;
+}
+
+@media (max-width: 900px), (pointer: coarse) {
+  .adventure-vitals {
+    top: max(10px, env(safe-area-inset-top));
+    left: max(10px, env(safe-area-inset-left));
+    width: 174px;
+    padding: 4px 6px;
+  }
+  .identity {
+    gap: 5px;
+  }
+  .identity span {
+    font-size: 12px;
+  }
+  .identity b {
+    display: block;
+  }
+  .identity em {
+    font-size: 10px;
+  }
+  .identity button {
+    width: 44px;
+    height: 44px;
+  }
+  .vital-row {
+    gap: 4px;
+    height: 14px;
+  }
+  .vital-row > b {
+    min-width: 48px;
+    font-size: 11px;
+  }
+  .vital-row small {
+    font-size: 10px;
+  }
+  .vital-row > span {
+    font-size: 10px;
+    width: 16px;
+  }
+  .adventure-nav {
+    right: max(10px, env(safe-area-inset-right));
+    top: max(10px, env(safe-area-inset-top));
+    gap: 4px;
+  }
+  .adventure-nav button {
+    width: 48px;
+    height: 54px;
+    font-size: 10px;
+  }
+  .adventure-nav svg {
+    width: 18px;
+    height: 18px;
+  }
+  .adventure-location {
+    top: 112px;
+    left: max(12px, env(safe-area-inset-left));
+    font-size: 12px;
+  }
+  .immersive-shell .waypoint-hud {
+    top: 147px;
+    width: auto;
+    min-width: 0;
+    max-width: calc(100% - 24px);
+    padding: 5px 10px;
+  }
+  .immersive-shell .waypoint-hud b {
+    font-size: 13px;
+  }
+  .immersive-shell .waypoint-hud small {
+    font-size: 11px;
+  }
+  .immersive-shell .combat-controls {
+    bottom: max(22px, env(safe-area-inset-bottom));
+    right: max(12px, env(safe-area-inset-right));
+    left: auto;
+    transform: none;
+    grid-template-columns: repeat(3, 48px);
+    gap: 6px;
+  }
+  .immersive-shell .combat-controls .action {
+    width: 48px;
+    min-height: 54px;
+    height: 54px;
+    padding: 4px 0;
+    gap: 3px;
+  }
+  .immersive-shell .action span {
+    font-size: 10px;
+  }
+  .immersive-shell .action kbd {
+    display: none;
+  }
+  .immersive-shell .action svg {
+    width: 18px;
+    height: 18px;
+  }
+  .immersive-shell .utility-controls {
+    left: auto;
+    right: max(12px, env(safe-area-inset-right));
+    bottom: 150px;
+    gap: 6px;
+  }
+  .immersive-shell .utility-controls button {
+    min-width: 75px;
+    min-height: 44px;
+    padding: 6px;
+    font-size: 12px;
+  }
+  .immersive-shell .utility-controls kbd {
+    display: none;
+  }
+  .immersive-shell .joystick {
+    display: grid;
+    place-items: center;
+    position: absolute;
+    z-index: 7;
+    width: 112px;
+    height: 112px;
+    left: max(16px, env(safe-area-inset-left));
+    bottom: max(38px, env(safe-area-inset-bottom));
+    border: 1px solid #c4b18a99;
+    background: #14212b88;
+    touch-action: none;
+  }
+  .immersive-shell .joystick i {
+    position: static;
+    transform: none;
+    width: 40px;
+    height: 40px;
+    background: #b9ccd666;
+    border: 1px solid #ecdfc7;
+  }
+  .immersive-shell .notice {
+    bottom: 214px;
+    width: calc(100% - 24px);
+    max-width: 540px;
+    max-height: 78px;
+    font-size: 12px;
+    padding: 7px 10px;
+  }
+  .immersive-shell .interaction-prompt {
+    top: 52%;
+    font-size: 12px;
+    padding: 8px;
+  }
+  .immersive-shell .interaction-prompt kbd {
+    display: none;
+  }
+  .immersive-shell .fps-lock-hint {
+    display: none;
+  }
+  .immersive-shell .construction-status {
+    top: 198px;
+    width: 190px;
+  }
+  .immersive-shell .construction-status > div:not(:first-child) {
+    display: none;
+  }
+  .immersive-shell .construction-status span {
+    font-size: 12px;
+  }
+  .immersive-shell .construction-status small {
+    display: none;
+  }
+  .immersive-shell .build-placement {
+    top: 194px;
+    width: calc(100% - 24px);
+    flex-wrap: wrap;
+    justify-content: center;
+    padding: 7px;
+    gap: 8px;
+  }
+  .immersive-shell .build-placement span {
+    display: none;
+  }
+  .immersive-shell .build-placement b {
+    font-size: 13px;
+  }
+  .immersive-shell .hazard-warning {
+    top: 37%;
+    font-size: 12px;
+  }
+}
+@media (max-width: 600px) {
+  .game-panel.game-panel {
+    width: calc(100vw - 12px);
+    max-height: calc(
+      100dvh - max(12px, env(safe-area-inset-top)) - env(safe-area-inset-bottom)
+    );
+    padding: 0 12px 18px;
+    border-radius: 9px;
+  }
+  .game-panel .panel-head {
+    gap: 6px;
+    padding: 12px 0;
+    margin-bottom: 12px;
+  }
+  .game-panel .panel-head > div {
+    gap: 6px;
+  }
+  .game-panel .panel-head b {
+    font-size: 18px;
+  }
+  .game-panel .panel-head > div span {
+    flex-basis: 100%;
+    font-size: 12px;
+    display: block;
+  }
+  .game-panel .panel-head > div > svg {
+    display: none;
+  }
+  .game-panel .growth-columns,
+  .game-panel .growth-top,
+  .game-panel .roster-grid,
+  .game-panel .adventure-grid,
+  .game-panel .rank-showcase {
+    grid-template-columns: 1fr;
+  }
+  .game-panel .career-grid,
+  .game-panel .building-grid {
+    grid-template-columns: 1fr;
+  }
+  .game-panel .career-card,
+  .game-panel .building-grid > button {
+    min-height: 140px;
+  }
+  .game-panel .milestone-group {
+    grid-template-columns: 1fr;
+  }
+  .game-panel .milestone-group > div {
+    grid-template-columns: 1fr;
+  }
+  .game-panel .milestone-group > strong {
+    padding: 6px;
+  }
+  .game-panel .task-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .game-panel .binding-grid {
+    grid-template-columns: 1fr;
+  }
+  .game-panel .binding-grid span {
+    font-size: 14px;
+  }
+  .game-panel .rank-showcase canvas {
+    height: 250px;
+  }
+  .game-panel .rank-showcase > div {
+    padding: 0 14px 16px;
+  }
+  .game-panel .rank-track {
+    gap: 2px;
+  }
+  .game-panel .rank-track span {
+    font-size: 12px;
+    padding: 8px 0;
+  }
+  .game-panel .rank-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .adventure-grid button {
+    padding: 12px;
+    gap: 12px;
+  }
+  .realm-summary {
+    gap: 6px 12px;
+    font-size: 13px;
+  }
+  .adventure-grid b {
+    font-size: 16px;
+  }
+  .immersive-shell .job-select {
+    padding: 24px 14px;
+  }
+  .immersive-shell .job-grid {
+    grid-template-columns: 1fr;
+  }
+  .immersive-shell .job-card {
+    min-height: 176px;
+    padding: 16px;
+  }
+  .immersive-shell .job-title h1 {
+    font-size: 27px;
+  }
+  .immersive-shell .job-title p {
+    font-size: 14px;
+  }
+}
+@media (max-height: 500px) and (max-width: 1000px) {
+  .immersive-shell .waypoint-hud {
+    top: 14px;
+    max-width: calc(100% - 400px);
+  }
+  .adventure-location {
+    top: 109px;
+  }
+  .immersive-shell .notice {
+    bottom: 12px;
+    max-width: calc(100% - 360px);
+    font-size: 12px;
+  }
+  .immersive-shell .combat-controls {
+    bottom: 8px;
+  }
+  .immersive-shell .utility-controls {
+    bottom: 130px;
+  }
+  .immersive-shell .joystick {
+    width: 90px;
+    height: 90px;
+    bottom: 16px;
+  }
+  .immersive-shell .construction-status {
+    top: 144px;
+  }
+  .immersive-shell .build-placement {
+    top: 85px;
+    max-width: 300px;
+  }
+  .immersive-shell .territory-banner {
+    top: 41%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .game-panel,
+  .immersive-shell .territory-banner,
+  .immersive-shell .job-card {
+    animation: none !important;
+    transition: none !important;
+  }
+}

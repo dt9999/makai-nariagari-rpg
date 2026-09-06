@@ -27,7 +27,14 @@ import {
 import { createDemonPreview, createGame3D } from './game3d';
 import { InventoryPanel } from './inventory-panel';
 import { RealmMap } from './realm-map';
+import {
+  AdventureHUD,
+  AdventureMenu,
+  GamePanel,
+  type GameScreen,
+} from './game-interface';
 import './inventory.css';
+import './game-interface.css';
 import {
   emptyEquipment,
   equipmentBonus,
@@ -53,7 +60,6 @@ import {
   subBiomeAt,
   sitesIn,
   headquartersOf,
-  campResidentAt,
   nearbyInteraction,
   moveOnGround,
   positionBlocked,
@@ -1343,7 +1349,6 @@ const applyCareer = (w: World, id: string, c: Career) => {
 
 export default function Home() {
   const canvas = useRef<HTMLCanvasElement>(null),
-    rankCanvas = useRef<HTMLCanvasElement>(null),
     game = useRef(fresh()),
     keys = useRef<Record<string, boolean>>({}),
     stick = useRef({ x: 0, y: 0, on: false }),
@@ -1351,6 +1356,7 @@ export default function Home() {
     bindingsRef = useRef({ ...DEFAULT_BINDINGS }),
     listeningRef = useRef<BindingAction | null>(null),
     menuOpenRef = useRef(false),
+    quickMenuRef = useRef<string | null>(null),
     [hud, setHud] = useState<World>(fresh),
     [mapOpen, setMapOpen] = useState(false),
     [rankOpen, setRankOpen] = useState(false),
@@ -1360,6 +1366,7 @@ export default function Home() {
     [minionOpen, setMinionOpen] = useState(false),
     [buildMenuOpen, setBuildMenuOpen] = useState(false),
     [inventoryOpen, setInventoryOpen] = useState(false),
+    [adventureOpen, setAdventureOpen] = useState(false),
     [rankEvolution, setRankEvolution] = useState<number | null>(null),
     [bindings, setBindings] = useState({ ...DEFAULT_BINDINGS }),
     [listening, setListening] = useState<BindingAction | null>(null);
@@ -1397,6 +1404,11 @@ export default function Home() {
     sync();
   };
   useEffect(() => {
+    quickMenuRef.current = inventoryOpen ? 'inventory' : mapOpen ? 'map' : null;
+    if (!controlsOpen) {
+      listeningRef.current = null;
+      setListening(null);
+    }
     menuOpenRef.current =
       mapOpen ||
       rankOpen ||
@@ -1405,7 +1417,8 @@ export default function Home() {
       controlsOpen ||
       minionOpen ||
       buildMenuOpen ||
-      inventoryOpen;
+      inventoryOpen ||
+      adventureOpen;
     if (menuOpenRef.current) {
       keys.current = {};
       stick.current = { x: 0, y: 0, on: false };
@@ -1422,7 +1435,19 @@ export default function Home() {
     minionOpen,
     buildMenuOpen,
     inventoryOpen,
+    adventureOpen,
   ]);
+  const openScreen = (screen: GameScreen) => {
+    setAdventureOpen(false);
+    setInventoryOpen(screen === 'inventory');
+    setMapOpen(screen === 'map');
+    setGrowthOpen(screen === 'growth');
+    setRankOpen(screen === 'rank');
+    setMinionOpen(screen === 'minions');
+    setBuildMenuOpen(screen === 'build');
+    setTransferOpen(screen === 'transfer');
+    setControlsOpen(screen === 'settings');
+  };
   const inventoryAction = (
     action: 'equip' | 'use' | 'discard' | 'exchange',
     id: string,
@@ -2090,9 +2115,31 @@ export default function Home() {
         e.target.closest('input,textarea,select,[contenteditable=true]')
       )
         return;
-      if (key === bindingsRef.current.inventory && !e.repeat) {
+      if (
+        key === 'escape' &&
+        !menuOpenRef.current &&
+        !document.pointerLockElement &&
+        game.current.job
+      ) {
+        setAdventureOpen(true);
+        return;
+      }
+      if (
+        key === bindingsRef.current.inventory &&
+        !e.repeat &&
+        (!menuOpenRef.current || quickMenuRef.current === 'inventory')
+      ) {
         e.preventDefault();
         setInventoryOpen((v) => !v);
+        return;
+      }
+      if (
+        key === bindingsRef.current.map &&
+        !e.repeat &&
+        (!menuOpenRef.current || quickMenuRef.current === 'map')
+      ) {
+        e.preventDefault();
+        setMapOpen((v) => !v);
         return;
       }
       if (menuOpenRef.current) return;
@@ -2107,7 +2154,6 @@ export default function Home() {
       if (key === map.dodge) dodge();
       if (key === map.recruit) recruit();
       if (key === map.gather) gather();
-      if (key === map.map) setMapOpen((v) => !v);
       if (key === map.guard) game.current.guarding = true;
     };
     const up = (e: KeyboardEvent) => {
@@ -2682,11 +2728,14 @@ export default function Home() {
       view.dispose();
     };
   }, [sync]);
-  useEffect(() => {
-    if (!rankOpen || !rankCanvas.current || !hud.job) return;
-    const preview = createDemonPreview(rankCanvas.current, hud.job, hud.rank);
-    return () => preview.dispose();
-  }, [rankOpen, hud.job, hud.rank]);
+  const rankPreviewRef = useCallback(
+    (node: HTMLCanvasElement | null) => {
+      if (!node || !hud.job) return;
+      const preview = createDemonPreview(node, hud.job, hud.rank);
+      return () => preview.dispose();
+    },
+    [hud.job, hud.rank],
+  );
   useEffect(() => {
     if (rankEvolution === null) return;
     const timeout = setTimeout(() => setRankEvolution(null), 2600);
@@ -2708,8 +2757,42 @@ export default function Home() {
       ]),
     ) as Record<MinionTask, number>;
   return (
-    <main className="game-shell">
-      <section className="game-frame open-world">
+    <main className="game-shell immersive-shell">
+      <section
+        className={`game-frame open-world ${hud.job ? 'playing' : 'choosing'} ${mapOpen || rankOpen || growthOpen || transferOpen || controlsOpen || minionOpen || buildMenuOpen || inventoryOpen || adventureOpen ? 'menu-visible' : ''}`}
+      >
+        {hud.job && (
+          <AdventureHUD
+            world={hud}
+            jobName={currentJob?.name || ''}
+            rankName={RANKS[hud.rank]}
+            regionName={current.name}
+            owner={currentOwner}
+            inCombat={hud.mobs.some(
+              (mob) => !mob.dead && !mob.ally && d(hud, mob) < 240,
+            )}
+            onMenu={() => setAdventureOpen(true)}
+            onMap={() => openScreen('map')}
+            onInventory={() => openScreen('inventory')}
+            onRank={() => openScreen('rank')}
+          />
+        )}
+        {adventureOpen && (
+          <AdventureMenu
+            stats={hud}
+            onClose={() => setAdventureOpen(false)}
+            onSelect={openScreen}
+            onRaid={() => {
+              setAdventureOpen(false);
+              raid();
+            }}
+            onRestart={() => {
+              game.current = fresh();
+              setAdventureOpen(false);
+              sync();
+            }}
+          />
+        )}
         <InventoryPanel
           world={hud}
           open={inventoryOpen}
@@ -2864,6 +2947,8 @@ export default function Home() {
                 視点で位置・向きを確認　左クリック：決定 / 右クリック：取消
               </span>
             </div>
+            <button onClick={confirmBuild}>着工</button>
+            <button onClick={build}>取消</button>
           </div>
         )}
         {!hud.job && (
@@ -2934,13 +3019,22 @@ export default function Home() {
           操作設定
         </button>
         {controlsOpen && (
-          <div className="controls-panel">
+          <GamePanel
+            title="PCキー設定"
+            className="controls-panel"
+            onClose={() => setControlsOpen(false)}
+          >
             <div className="panel-head">
               <div>
                 <Settings size={18} />
                 <b>PCキー設定</b>
               </div>
-              <button onClick={() => setControlsOpen(false)}>×</button>
+              <button
+                onClick={() => setControlsOpen(false)}
+                aria-label="操作設定を閉じる"
+              >
+                戻る
+              </button>
             </div>
             <p>変更する操作を選び、割り当てたいキーを押してください。</p>
             <div className="binding-grid">
@@ -2980,7 +3074,7 @@ export default function Home() {
             <small>
               マウス：視点 / 左クリック：通常攻撃 / 右クリック：防御・建築取消
             </small>
-          </div>
+          </GamePanel>
         )}
         <RealmMap
           world={hud}
@@ -2989,7 +3083,9 @@ export default function Home() {
           onWaypoint={setWaypoint}
         />
         {rankOpen && (
-          <div
+          <GamePanel
+            title="魔族ランク"
+            onClose={() => setRankOpen(false)}
             className={
               'rank-panel ' + (rankEvolution !== null ? 'evolving' : '')
             }
@@ -2999,11 +3095,16 @@ export default function Home() {
                 <Shield size={18} />
                 <b>魔族ランク</b>
               </div>
-              <button onClick={() => setRankOpen(false)}>×</button>
+              <button
+                onClick={() => setRankOpen(false)}
+                aria-label="魔族ランクを閉じる"
+              >
+                戻る
+              </button>
             </div>
             <div className="rank-showcase">
               <canvas
-                ref={rankCanvas}
+                ref={rankPreviewRef}
                 aria-label={`${RANKS[hud.rank]}ランク主人公の全身3D表示`}
               />
               <div>
@@ -3049,17 +3150,26 @@ export default function Home() {
               {ready ? 'ランクアップ' : '条件未達成'}
             </button>
             <em>Lv.99だけでは魔王になれません</em>
-          </div>
+          </GamePanel>
         )}
         {transferOpen && currentJob && (
-          <div className="transfer-panel">
+          <GamePanel
+            title="転職の祭壇"
+            className="transfer-panel"
+            onClose={() => setTransferOpen(false)}
+          >
             <div className="panel-head">
               <div>
                 <RefreshCcw size={18} />
                 <b>転職の祭壇</b>
                 <span>世界進行は維持・職業進行は個別</span>
               </div>
-              <button onClick={() => setTransferOpen(false)}>×</button>
+              <button
+                onClick={() => setTransferOpen(false)}
+                aria-label="転職を閉じる"
+              >
+                戻る
+              </button>
             </div>
             <div className="preserved">
               <ShieldCheck />
@@ -3123,10 +3233,14 @@ export default function Home() {
             <p className="transfer-warning">
               転職先ではLv.1・能力値・武器Lv.1から育成。以前の職業へ戻ると保存した進行を復元します。
             </p>
-          </div>
+          </GamePanel>
         )}
         {growthOpen && currentJob && (
-          <div className="growth-panel">
+          <GamePanel
+            title="成長ボード"
+            className="growth-panel"
+            onClose={() => setGrowthOpen(false)}
+          >
             <div className="panel-head">
               <div>
                 <Brain size={18} />
@@ -3135,7 +3249,12 @@ export default function Home() {
                   {currentJob.name} / 職業Lv.{hud.lv}
                 </span>
               </div>
-              <button onClick={() => setGrowthOpen(false)}>×</button>
+              <button
+                onClick={() => setGrowthOpen(false)}
+                aria-label="成長ボードを閉じる"
+              >
+                戻る
+              </button>
             </div>
             <div className="growth-top">
               <div className="sp-wallet">
@@ -3260,17 +3379,26 @@ export default function Home() {
                 </div>
               ))}
             </section>
-          </div>
+          </GamePanel>
         )}
         {buildMenuOpen && (
-          <div className="build-menu-panel">
+          <GamePanel
+            title="自由建築"
+            className="build-menu-panel"
+            onClose={() => setBuildMenuOpen(false)}
+          >
             <div className="panel-head">
               <div>
                 <Hammer size={18} />
                 <b>自由建築</b>
                 <span>歩いて探した場所へ建築予定を配置</span>
               </div>
-              <button onClick={() => setBuildMenuOpen(false)}>×</button>
+              <button
+                onClick={() => setBuildMenuOpen(false)}
+                aria-label="自由建築を閉じる"
+              >
+                戻る
+              </button>
             </div>
             <div className="build-wallet">
               <span>
@@ -3322,17 +3450,26 @@ export default function Home() {
             <p className="build-help">
               選択後、半透明の完成予定を一人称視点で確認できます。左クリックで着工、右クリックで取消。
             </p>
-          </div>
+          </GamePanel>
         )}
         {minionOpen && (
-          <div className="minion-panel">
+          <GamePanel
+            title="配下名簿・仕事命令"
+            className="minion-panel"
+            onClose={() => setMinionOpen(false)}
+          >
             <div className="panel-head">
               <div>
                 <Users size={18} />
                 <b>配下名簿・仕事命令</b>
                 <span>勢力 {hud.roster.length}体 / 配置はいつでも変更可能</span>
               </div>
-              <button onClick={() => setMinionOpen(false)}>×</button>
+              <button
+                onClick={() => setMinionOpen(false)}
+                aria-label="配下名簿を閉じる"
+              >
+                戻る
+              </button>
             </div>
             <div className="task-summary">
               {MINION_TASKS.map((task) => (
@@ -3399,7 +3536,7 @@ export default function Home() {
                 })}
               </div>
             )}
-          </div>
+          </GamePanel>
         )}
         <div className="quest-card">
           <span>現在地</span>
@@ -3413,7 +3550,9 @@ export default function Home() {
                 : 'まだ誰の領土でもない'}
           </small>
         </div>
-        <div className="notice">{hud.message}</div>
+        <div className="notice" role="status">
+          {hud.message}
+        </div>
         {!!activeConstructions.length && (
           <div className="construction-status">
             {activeConstructions.slice(0, 2).map((site) => {
@@ -3449,7 +3588,8 @@ export default function Home() {
           </button>
           <button
             className={'action guard ' + (hud.guarding ? 'active' : '')}
-            onPointerDown={() => {
+            onPointerDown={(event) => {
+              event.currentTarget.setPointerCapture(event.pointerId);
               game.current.guarding = true;
               sync();
             }}
@@ -3458,6 +3598,13 @@ export default function Home() {
               sync();
             }}
             onPointerLeave={() => {
+              game.current.guarding = false;
+            }}
+            onPointerCancel={() => {
+              game.current.guarding = false;
+              sync();
+            }}
+            onLostPointerCapture={() => {
               game.current.guarding = false;
             }}
           >
@@ -3472,7 +3619,11 @@ export default function Home() {
           </button>
           <button className="action combat-skill" onClick={useCombatSkill}>
             <Zap />
-            <span>スキル</span>
+            <span>
+              {hud.skillCd > 0
+                ? `スキル ${Math.ceil(hud.skillCd)}秒`
+                : 'スキル'}
+            </span>
             <kbd>{bindingName(bindings.skill)}</kbd>
           </button>
           <button className="action jump" onClick={jump}>
@@ -3535,6 +3686,10 @@ export default function Home() {
             );
           }}
           onPointerUp={() => (stick.current = { x: 0, y: 0, on: false })}
+          onPointerCancel={() => (stick.current = { x: 0, y: 0, on: false })}
+          onLostPointerCapture={() =>
+            (stick.current = { x: 0, y: 0, on: false })
+          }
         >
           <i />
         </div>

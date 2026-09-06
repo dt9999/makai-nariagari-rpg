@@ -11,6 +11,12 @@
   gap: 14px;
   font-size: 16px;
 }
+.realm-mobile-select { display:none; }
+@media(max-width:600px) {
+  .realm-map-panel .realm-regions { display:none; }
+  .realm-mobile-select { display:grid; gap:6px; font-size:13px; color:#c9c6be; }
+  .realm-mobile-select select { min-height:44px; width:100%; padding:8px; background:#252d38; border:1px solid #827257; border-radius:6px; color:#fff3da; font-size:15px; }
+}
 .realm-map-panel button {
   min-height: 44px;
   font: inherit;
