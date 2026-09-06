@@ -1054,3 +1054,44 @@
     transition: none !important;
   }
 }
+@media (max-width: 900px), (pointer: coarse) {
+  .immersive-shell .combat-controls {
+    right: max(var(--touch-inset), env(safe-area-inset-right));
+    bottom: calc(max(22px, env(safe-area-inset-bottom)) + var(--touch-rise));
+    transform: scale(var(--touch-scale));
+    transform-origin: bottom right;
+  }
+  .immersive-shell .joystick {
+    left: max(var(--touch-inset), env(safe-area-inset-left));
+    bottom: calc(max(38px, env(safe-area-inset-bottom)) + var(--touch-rise));
+    transform: scale(var(--touch-scale));
+    transform-origin: bottom left;
+  }
+  .immersive-shell .utility-controls {
+    right: max(var(--touch-inset), env(safe-area-inset-right));
+    bottom: calc(150px + var(--touch-rise) + (var(--touch-scale) - 1) * 114px);
+  }
+  .immersive-shell .notice {
+    bottom: calc(214px + var(--touch-rise) + (var(--touch-scale) - 1) * 114px);
+  }
+  .immersive-shell .action span {
+    font-size: 12px;
+  }
+  .adventure-nav button {
+    font-size: 11px;
+  }
+}
+@media (max-height: 500px) and (max-width: 1000px) {
+  .immersive-shell .combat-controls {
+    bottom: calc(8px + var(--touch-rise));
+  }
+  .immersive-shell .joystick {
+    bottom: calc(16px + var(--touch-rise));
+  }
+  .immersive-shell .notice {
+    bottom: 8px;
+  }
+  .immersive-shell .utility-controls {
+    bottom: calc(134px + var(--touch-rise) + (var(--touch-scale) - 1) * 114px);
+  }
+}

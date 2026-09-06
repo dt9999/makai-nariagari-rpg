@@ -27,6 +27,13 @@ import {
 import { createDemonPreview, createGame3D } from './game3d';
 import { InventoryPanel } from './inventory-panel';
 import { RealmMap } from './realm-map';
+import { PreferencesPanel } from './preferences-panel';
+import {
+  DEFAULT_PREFERENCES,
+  sanitizePreferences,
+  type GamePreferences,
+  type RenderPerformance,
+} from './preferences';
 import {
   AdventureHUD,
   AdventureMenu,
@@ -269,6 +276,7 @@ type Career = {
   weaponLevel: number;
 };
 type World = {
+  preferences: GamePreferences;
   talkedSites: string[];
   activatedSites: string[];
   rumoredSites: string[];
@@ -1159,6 +1167,7 @@ const baseStats = (): Stats => ({
   leadership: 1,
 });
 const fresh = (): World => ({
+  preferences: { ...DEFAULT_PREFERENCES },
   talkedSites: [],
   activatedSites: [],
   rumoredSites: [],
@@ -1191,7 +1200,7 @@ const fresh = (): World => ({
   })),
   lootSequence: 1000,
   x: 1024,
-  y: 1050,
+  y: 1180,
   hp: 100,
   maxHp: 100,
   xp: 0,
@@ -1367,6 +1376,9 @@ export default function Home() {
     [buildMenuOpen, setBuildMenuOpen] = useState(false),
     [inventoryOpen, setInventoryOpen] = useState(false),
     [adventureOpen, setAdventureOpen] = useState(false),
+    [renderPerformance, setRenderPerformance] =
+      useState<RenderPerformance | null>(null),
+    [pointerLocked, setPointerLocked] = useState(false),
     [rankEvolution, setRankEvolution] = useState<number | null>(null),
     [bindings, setBindings] = useState({ ...DEFAULT_BINDINGS }),
     [listening, setListening] = useState<BindingAction | null>(null);
@@ -1403,6 +1415,28 @@ export default function Home() {
     game.current.message = s;
     sync();
   };
+  const changePreferences = (value: GamePreferences) => {
+    game.current.preferences = sanitizePreferences(value);
+    try {
+      localStorage.setItem(
+        'makai-preferences',
+        JSON.stringify(game.current.preferences),
+      );
+    } catch {
+      /* Device-local preferences remain usable without storage. */
+    }
+    sync();
+  };
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('makai-preferences');
+      if (saved)
+        game.current.preferences = sanitizePreferences(JSON.parse(saved));
+    } catch {
+      game.current.preferences = { ...DEFAULT_PREFERENCES };
+    }
+    sync();
+  }, [sync]);
   useEffect(() => {
     quickMenuRef.current = inventoryOpen ? 'inventory' : mapOpen ? 'map' : null;
     if (!controlsOpen) {
@@ -1680,7 +1714,10 @@ export default function Home() {
   };
   const heavyAttack = () => {
     let w = game.current;
-    if (!w.job || w.heavyCd > 0 || w.energy < 28 || w.guarding) return;
+    if (!w.job) return;
+    if (w.heavyCd > 0) return say('強攻撃の構え直し中。少し待とう。');
+    if (w.energy < 28) return say('強攻撃にはスタミナ28が必要。');
+    if (w.guarding) return say('防御を解いてから強攻撃しよう。');
     let j = jobOf(w),
       t = targetsAhead(w, 125 * j.range, 0.25)[0];
     if (!t) return say('強攻撃の間合いに敵がいない。');
@@ -1708,7 +1745,9 @@ export default function Home() {
   };
   const dodge = () => {
     let w = game.current;
-    if (!w.job || w.dodgeCd > 0 || w.energy < 22) return;
+    if (!w.job) return;
+    if (w.dodgeCd > 0) return say('回避の直後。次の踏み込みを待とう。');
+    if (w.energy < 22) return say('回避にはスタミナ22が必要。');
     w.energy -= 22;
     w.dodgeCd = 0.82;
     w.dodgeTime = 0.48;
@@ -1725,7 +1764,9 @@ export default function Home() {
   };
   const useCombatSkill = () => {
     let w = game.current;
-    if (!w.job || w.skillCd > 0 || w.energy < 35) return;
+    if (!w.job) return;
+    if (w.skillCd > 0) return say(`スキルはあと${Math.ceil(w.skillCd)}秒で使用可能。`);
+    if (w.energy < 35) return say('スキルにはスタミナ35が必要。');
     let j = jobOf(w),
       targets = targetsAhead(w, 155 * j.range, 0.05).slice(0, 6);
     if (!targets.length) return say('スキルの範囲に敵がいない。');
@@ -2095,10 +2136,16 @@ export default function Home() {
     if (!c) return;
     const rotateView = (dx: number, dy: number, sensitivity = 0.0022) => {
       const w = game.current;
-      w.viewYaw -= dx * sensitivity;
+      const preferences = w.preferences || DEFAULT_PREFERENCES;
+      const gain =
+        sensitivity *
+        (sensitivity === 0.005
+          ? preferences.touchSensitivity
+          : preferences.sensitivity);
+      w.viewYaw -= dx * gain;
       w.viewPitch = Math.max(
         -1.2,
-        Math.min(1.2, w.viewPitch - dy * sensitivity),
+        Math.min(1.2, w.viewPitch - dy * gain * (preferences.invertY ? -1 : 1)),
       );
       w.facingX = Math.sin(w.viewYaw);
       w.facingY = Math.cos(w.viewYaw);
@@ -2164,10 +2211,12 @@ export default function Home() {
     const mouseDown = (e: MouseEvent) => {
       if (menuOpenRef.current || !game.current.job) return;
       if (e.button === 0) {
+        if (document.pointerLockElement !== c) {
+          void c.requestPointerLock().catch(() => undefined);
+          return;
+        }
         if (game.current.buildMode) confirmBuild();
         else attack();
-        if (document.pointerLockElement !== c)
-          void c.requestPointerLock().catch(() => undefined);
       }
       if (e.button === 2) {
         if (game.current.buildMode) build();
@@ -2184,6 +2233,7 @@ export default function Home() {
     const pointerDown = (e: PointerEvent) => {
       if (menuOpenRef.current) return;
       if (e.pointerType !== 'touch') return;
+      e.preventDefault();
       const rect = c.getBoundingClientRect();
       if (e.clientX < rect.left + rect.width * 0.42) return;
       lookTouch.current = { id: e.pointerId, x: e.clientX, y: e.clientY };
@@ -2203,6 +2253,18 @@ export default function Home() {
       if (e.pointerId === lookTouch.current.id) lookTouch.current.id = -1;
     };
     const contextMenu = (e: MouseEvent) => e.preventDefault();
+    const clearInput = () => {
+      keys.current = {};
+      stick.current = { x: 0, y: 0, on: false };
+      lookTouch.current.id = -1;
+      game.current.guarding = false;
+    };
+    const lockChanged = () => {
+      setPointerLocked(document.pointerLockElement === c);
+      if (document.pointerLockElement !== c) clearInput();
+    };
+    document.addEventListener('pointerlockchange', lockChanged);
+    addEventListener('blur', clearInput);
     addEventListener('keydown', down);
     addEventListener('keyup', up);
     addEventListener('mousemove', mouseMove);
@@ -2214,6 +2276,8 @@ export default function Home() {
     c.addEventListener('pointerup', pointerUp);
     c.addEventListener('pointercancel', pointerUp);
     return () => {
+      document.removeEventListener('pointerlockchange', lockChanged);
+      removeEventListener('blur', clearInput);
       removeEventListener('keydown', down);
       removeEventListener('keyup', up);
       removeEventListener('mousemove', mouseMove);
@@ -2229,7 +2293,7 @@ export default function Home() {
   useEffect(() => {
     const c = canvas.current;
     if (!c) return;
-    const view = createGame3D(c, REGIONS);
+    const view = createGame3D(c, REGIONS, setRenderPerformance);
     let last = performance.now(),
       frame = 0,
       id = 0;
@@ -2238,6 +2302,7 @@ export default function Home() {
       last = now;
       frame++;
       const w = game.current;
+      w.preferences ||= { ...DEFAULT_PREFERENCES };
       w.discoveredSites ||= [];
       w.talkedSites ||= [];
       w.activatedSites ||= [];
@@ -2759,6 +2824,13 @@ export default function Home() {
   return (
     <main className="game-shell immersive-shell">
       <section
+        style={
+          {
+            '--touch-scale': hud.preferences?.touchScale ?? 1,
+            '--touch-rise': `${hud.preferences?.touchRise ?? 0}px`,
+            '--touch-inset': `${hud.preferences?.touchInset ?? 12}px`,
+          } as React.CSSProperties
+        }
         className={`game-frame open-world ${hud.job ? 'playing' : 'choosing'} ${mapOpen || rankOpen || growthOpen || transferOpen || controlsOpen || minionOpen || buildMenuOpen || inventoryOpen || adventureOpen ? 'menu-visible' : ''}`}
       >
         {hud.job && (
@@ -2768,7 +2840,7 @@ export default function Home() {
             rankName={RANKS[hud.rank]}
             regionName={current.name}
             owner={currentOwner}
-            inCombat={hud.mobs.some(
+            inCombat={!sitesIn(current.id).some(site => site.kind === 'camp' && d(hud, site) < 190) && hud.mobs.some(
               (mob) => !mob.dead && !mob.ally && d(hud, mob) < 240,
             )}
             onMenu={() => setAdventureOpen(true)}
@@ -2787,7 +2859,9 @@ export default function Home() {
               raid();
             }}
             onRestart={() => {
+              const preferences = game.current.preferences;
               game.current = fresh();
+              game.current.preferences = preferences;
               setAdventureOpen(false);
               sync();
             }}
@@ -2932,10 +3006,12 @@ export default function Home() {
               <i />
               <i />
             </div>
-            <div className="fps-lock-hint">
-              <Crosshair size={13} />
-              画面をクリックして視点固定
-            </div>
+            {!pointerLocked && (
+              <div className="fps-lock-hint">
+                <Crosshair size={13} />
+                画面をクリックして視点固定
+              </div>
+            )}
           </>
         )}
         {hud.buildMode && (
@@ -3020,14 +3096,14 @@ export default function Home() {
         </button>
         {controlsOpen && (
           <GamePanel
-            title="PCキー設定"
+            title="操作・画質設定"
             className="controls-panel"
             onClose={() => setControlsOpen(false)}
           >
             <div className="panel-head">
               <div>
                 <Settings size={18} />
-                <b>PCキー設定</b>
+                <b>操作・画質設定</b>
               </div>
               <button
                 onClick={() => setControlsOpen(false)}
@@ -3036,6 +3112,12 @@ export default function Home() {
                 戻る
               </button>
             </div>
+            <PreferencesPanel
+              value={hud.preferences || DEFAULT_PREFERENCES}
+              onChange={changePreferences}
+              performance={renderPerformance}
+            />
+            <h3>PCキー設定</h3>
             <p>変更する操作を選び、割り当てたいキーを押してください。</p>
             <div className="binding-grid">
               {(Object.keys(BINDING_LABELS) as BindingAction[]).map(

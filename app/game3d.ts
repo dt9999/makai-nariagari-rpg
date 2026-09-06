@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import {
   SCALE,
   worldX,
@@ -13,6 +14,12 @@ import { createLandscape } from './landscape';
 import { createLootRenderer } from './loot3d';
 import { createHazardRenderer } from './hazards3d';
 import type { WorldLoot } from './items';
+import {
+  DEFAULT_PREFERENCES,
+  qualityProfile,
+  type GamePreferences,
+  type RenderPerformance,
+} from './preferences';
 
 export type RenderRegion = {
   id: string;
@@ -80,6 +87,7 @@ type RenderBase = {
   workers: number;
 };
 export type RenderWorld = {
+  preferences?: GamePreferences;
   worldTime: number;
   loot: WorldLoot[];
   x: number;
@@ -212,6 +220,23 @@ const geo = {
   octa: new THREE.OctahedronGeometry(1, 0),
 };
 
+const sharedGeometry = new Set<THREE.BufferGeometry>(Object.values(geo));
+const sharedMaterial = new Set<THREE.Material>(Object.values(mats));
+function releaseModel(root: THREE.Object3D) {
+  const geometries = new Set<THREE.BufferGeometry>(),
+    materials = new Set<THREE.Material>();
+  root.traverse((part) => {
+    if (!(part instanceof THREE.Mesh)) return;
+    if (!sharedGeometry.has(part.geometry)) geometries.add(part.geometry);
+    for (const material of Array.isArray(part.material)
+      ? part.material
+      : [part.material])
+      if (!sharedMaterial.has(material)) materials.add(material);
+  });
+  geometries.forEach((g) => g.dispose());
+  materials.forEach((m) => m.dispose());
+}
+
 function mesh(
   geometry: THREE.BufferGeometry,
   material: THREE.Material,
@@ -287,6 +312,31 @@ function buildWeapon(job: string, color: number) {
     );
     return h;
   };
+  const blade = (
+    width: number,
+    length: number,
+    thickness: number,
+    y: number,
+    parent: THREE.Object3D = root,
+  ) => {
+    const shape = new THREE.Shape();
+    shape.moveTo(-width * 0.5, 0);
+    shape.lineTo(width * 0.5, 0);
+    shape.lineTo(width * 0.43, length * 0.82);
+    shape.lineTo(0, length);
+    shape.lineTo(-width * 0.43, length * 0.82);
+    shape.closePath();
+    const geometry = new THREE.ExtrudeGeometry(shape, {
+      depth: thickness,
+      bevelEnabled: true,
+      bevelSize: thickness * 0.2,
+      bevelThickness: thickness * 0.2,
+      bevelSegments: 1,
+      steps: 1,
+    });
+    geometry.translate(0, 0, -thickness * 0.5);
+    mesh(geometry, magic, [1, 1, 1], [0, y, 0], parent);
+  };
   if (job === 'mage' || job === 'nightseer') {
     mesh(geo.cylinder, mats.wood, [0.045, 0.83, 0.045], [0, 0.1, 0], root);
     mesh(geo.sphere, magic, [0.17, 0.17, 0.17], [0, 1, 0], root);
@@ -312,14 +362,14 @@ function buildWeapon(job: string, color: number) {
         [0, 0.02, 0],
         dagger,
       );
-      mesh(geo.box, magic, [0.07, 0.42, 0.025], [0, 0.34, 0], dagger);
+      blade(0.075, 0.45, 0.025, 0.18, dagger);
       mesh(geo.box, mats.gold, [0.17, 0.035, 0.05], [0, 0.16, 0], dagger);
       dagger.rotation.z = side * 0.12;
       root.add(dagger);
     }
   } else if (job === 'berserker' || job === 'warlock') {
     handle();
-    mesh(geo.box, magic, [0.14, 0.92, 0.065], [0, 0.96, 0], root);
+    blade(0.18, 0.96, 0.055, 0.5);
     mesh(geo.box, mats.iron, [0.54, 0.22, 0.1], [0, 1.55, 0], root);
     mesh(geo.box, mats.gold, [0.32, 0.055, 0.11], [0, 0.57, 0], root);
   } else if (job === 'ruler') {
@@ -334,7 +384,7 @@ function buildWeapon(job: string, color: number) {
     mesh(geo.sphere, mats.eye, [0.08, 0.08, 0.08], [0, 1, 0], root);
   } else {
     handle();
-    mesh(geo.box, magic, [0.1, 0.75, 0.035], [0, 0.86, 0], root);
+    blade(0.095, 0.79, 0.03, 0.45);
     mesh(geo.box, mats.gold, [0.34, 0.055, 0.08], [0, 0.42, 0], root);
   }
   root.userData.magicMaterial = magic;
@@ -1069,24 +1119,24 @@ function buildFirstPersonRig(job: string, rank = 0) {
   const sleeve = new THREE.MeshStandardMaterial({
     color: new THREE.Color(color).lerp(
       new THREE.Color(0x18131f),
-      rankRatio * 0.42,
+      0.68 + rankRatio * 0.15,
     ),
     roughness: 0.88 - rankRatio * 0.18,
-    depthTest: false,
-    depthWrite: false,
+    depthTest: true,
+    depthWrite: true,
   });
   const skin = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(0x9564a5).lerp(new THREE.Color(0x4c315f), rankRatio),
+    color: new THREE.Color(0x807282).lerp(new THREE.Color(0x4c455b), rankRatio),
     roughness: 0.7 - rankRatio * 0.17,
-    depthTest: false,
-    depthWrite: false,
+    depthTest: true,
+    depthWrite: true,
   });
   const demonHard = new THREE.MeshStandardMaterial({
     color: rank >= 5 ? 0x17141d : 0x38313e,
     roughness: 0.31,
     metalness: 0.36 + rankRatio * 0.24,
-    depthTest: false,
-    depthWrite: false,
+    depthTest: true,
+    depthWrite: true,
   });
   const runeMaterial = new THREE.MeshBasicMaterial({
     color: rank >= 6 ? 0xd8adff : 0xa866ee,
@@ -1099,23 +1149,77 @@ function buildFirstPersonRig(job: string, rank = 0) {
     const arm = new THREE.Group();
     arm.position.set(side * 0.3, -0.31, -0.58);
     const forearm = mesh(
-      geo.cylinder,
+      new THREE.CylinderGeometry(0.06, 0.095, 0.6, 16),
       sleeve,
-      [0.085, 0.34, 0.085],
-      [0, -0.02, 0],
+      [1, 1, 1],
+      [0, 0, -0.04],
       arm,
       false,
     );
-    forearm.rotation.x = -0.92;
+    forearm.rotation.x = -0.78;
     const hand = mesh(
-      geo.sphere,
+      new RoundedBoxGeometry(1, 1, 1, 3, 0.16),
       skin,
-      [0.095, 0.095, 0.11],
-      [0, 0.25, -0.25],
+      [0.14, 0.11, 0.085],
+      [0, 0.245, -0.21],
       arm,
       false,
     );
     hand.renderOrder = 20;
+    // Four curled fingers and an opposing thumb actually enclose the grip.
+    for (let finger = 0; finger < 4; finger++) {
+      const x = (finger - 1.5) * 0.034;
+      const points = [
+        new THREE.Vector3(x, 0.285, -0.225),
+        new THREE.Vector3(x, 0.29, -0.285),
+        new THREE.Vector3(x, 0.25, -0.307),
+        new THREE.Vector3(x, 0.225, -0.278),
+      ];
+      for (let joint = 0; joint < 3; joint++) {
+        const vector = points[joint + 1].clone().sub(points[joint]);
+        const segment = mesh(
+          new THREE.CapsuleGeometry(
+            0.016 - joint * 0.0015,
+            Math.max(0.002, vector.length() - 0.022),
+            3,
+            8,
+          ),
+          skin,
+          [1, 1, 1],
+          points[joint]
+            .clone()
+            .add(points[joint + 1])
+            .multiplyScalar(0.5)
+            .toArray(),
+          arm,
+          false,
+        );
+        segment.quaternion.setFromUnitVectors(
+          new THREE.Vector3(0, 1, 0),
+          vector.normalize(),
+        );
+      }
+    }
+    const thumb = mesh(
+      new THREE.CapsuleGeometry(0.023, 0.075, 4, 10),
+      skin,
+      [1, 1, 1],
+      [-side * 0.064, 0.23, -0.25],
+      arm,
+      false,
+    );
+    thumb.rotation.set(-0.7, 0, side * 0.55);
+    for (const y of [-0.12, 0.03]) {
+      const strap = mesh(
+        new THREE.CylinderGeometry(0.096, 0.09, 0.035, 16),
+        mats.leather,
+        [1, 1, 1],
+        [0, y, -0.04 - y],
+        arm,
+        false,
+      );
+      strap.rotation.x = -0.78;
+    }
     if (rank >= 1)
       for (let claw = -1; claw <= 1; claw++) {
         const talon = mesh(
@@ -1172,15 +1276,24 @@ function buildFirstPersonRig(job: string, rank = 0) {
   const leftArm = makeArm(-1),
     rightArm = makeArm(1);
   const weapon = buildWeapon(job, color);
-  weapon.position.set(0.02, 0.22, -0.25);
+  weapon.position.set(0.02, 0.1, -0.25);
   weapon.rotation.set(-0.18, 0, -0.22);
   weapon.traverse((child) => {
     if (!(child instanceof THREE.Mesh)) return;
     const original = child.material as THREE.MeshStandardMaterial;
     child.material = original.clone();
     const material = child.material as THREE.MeshStandardMaterial;
-    material.depthTest = false;
-    material.depthWrite = false;
+    if (
+      original === weapon.userData.magicMaterial &&
+      !['mage', 'nightseer', 'ruler'].includes(job)
+    ) {
+      material.color.set(rank >= 4 ? 0x798ba6 : 0x8b9299);
+      material.emissiveIntensity = 0;
+      material.roughness = 0.42;
+      material.metalness = 0.84;
+    }
+    material.depthTest = true;
+    material.depthWrite = true;
     material.metalness = Math.min(
       1,
       (material.metalness || 0) + rankRatio * 0.22,
@@ -1270,8 +1383,9 @@ function animateFirstPersonRig(
   data.gait += dt * (2.4 + speedScene * 4.3);
   const locomotion = data.speedBlend as number,
     phase = data.gait as number,
-    bobX = Math.sin(phase) * 0.018 * locomotion,
-    bobY = Math.abs(Math.cos(phase * 2)) * 0.016 * locomotion;
+    motion = world.preferences?.weaponMotion ?? 1,
+    bobX = Math.sin(phase) * 0.018 * locomotion * motion,
+    bobY = Math.abs(Math.cos(phase * 2)) * 0.016 * locomotion * motion;
   rig.position.set(bobX, -bobY, 0);
   rig.rotation.set(0, 0, -bobX * 0.45);
   leftArm.position.set(-0.3, -0.31, -0.58);
@@ -1321,9 +1435,22 @@ function animateFirstPersonRig(
   }
   if (world.dodgeTime > 0) {
     const arc = Math.sin(clamp01(1 - world.dodgeTime / 0.48) * Math.PI);
-    rig.position.y -= arc * 0.15;
-    rig.rotation.z -= arc * 0.22;
+    rig.position.y -= arc * 0.15 * motion;
+    rig.rotation.z -= arc * 0.22 * motion;
   }
+  const attackMotion = 0.3 + 0.7 * motion;
+  rightArm.position.lerp(
+    new THREE.Vector3(0.3, -0.31, -0.58),
+    (1 - attackMotion) * (1 - guard),
+  );
+  leftArm.position.lerp(
+    new THREE.Vector3(-0.3, -0.31, -0.58),
+    (1 - attackMotion) * (1 - guard),
+  );
+  rightArm.rotation.x *= attackMotion;
+  rightArm.rotation.z *= attackMotion;
+  weapon.rotation.x *= attackMotion;
+  weapon.rotation.z *= attackMotion;
   const glow = spellGlow.material as THREE.MeshBasicMaterial;
   const passiveGlow = rank >= 2 ? Math.min(0.28, 0.025 * rank) : 0;
   glow.opacity =
@@ -3188,8 +3315,9 @@ function addLandmark(scene: THREE.Scene, region: RenderRegion, index: number) {
 export function createGame3D(
   canvas: HTMLCanvasElement,
   regions: RenderRegion[],
+  onPerformance?: (sample: RenderPerformance) => void,
 ) {
-  const mobile = matchMedia('(pointer: coarse)').matches || innerWidth < 760;
+  let mobile = matchMedia('(pointer: coarse)').matches || innerWidth < 760;
   const renderer = new THREE.WebGLRenderer({
     canvas,
     antialias: !mobile,
@@ -3203,6 +3331,13 @@ export function createGame3D(
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
   const scene = new THREE.Scene();
+  const lightingStudio = new RoomEnvironment();
+  const environmentGenerator = new THREE.PMREMGenerator(renderer);
+  const reflectionMap = environmentGenerator.fromScene(lightingStudio, 0.04);
+  scene.environment = reflectionMap.texture;
+  scene.environmentIntensity = 0.35;
+  lightingStudio.dispose();
+  environmentGenerator.dispose();
   scene.background = new THREE.Color(0x100d19);
   scene.fog = new THREE.FogExp2(0x171321, mobile ? 0.0082 : 0.0062);
   const camera = new THREE.PerspectiveCamera(mobile ? 72 : 68, 1, 0.04, 340);
@@ -3334,16 +3469,8 @@ export function createGame3D(
     );
   buildGhost.visible = false;
   scene.add(buildGhost);
-  const armyBody = new THREE.InstancedMesh(
-      geo.cylinder,
-      mats.ally,
-      mobile ? 24 : 48,
-    ),
-    armyHead = new THREE.InstancedMesh(
-      geo.lowSphere,
-      mats.skin,
-      mobile ? 24 : 48,
-    ),
+  const armyBody = new THREE.InstancedMesh(geo.cylinder, mats.ally, 48),
+    armyHead = new THREE.InstancedMesh(geo.lowSphere, mats.skin, 48),
     armyDummy = new THREE.Object3D();
   armyBody.castShadow = armyHead.castShadow = !mobile;
   armyBody.frustumCulled = armyHead.frustumCulled = false;
@@ -3351,6 +3478,12 @@ export function createGame3D(
   let elapsed = 0,
     lastX = Number.NaN,
     lastY = Number.NaN;
+  let currentQuality = '',
+    pendingDt = 0,
+    lastDraw = 0;
+  let sampleStarted = performance.now(),
+    sampleFrames = 0,
+    sampleTime = 0;
   const ensureSize = () => {
     const width = Math.max(1, canvas.clientWidth),
       height = Math.max(1, canvas.clientHeight);
@@ -3364,10 +3497,36 @@ export function createGame3D(
     }
   };
   const render = (world: RenderWorld, dt: number) => {
+    const preferences = world.preferences || DEFAULT_PREFERENCES;
+    mobile =
+      matchMedia('(pointer: coarse)').matches || canvas.clientWidth < 760;
+    const profile = qualityProfile(preferences.quality, mobile);
+    const qualityKey = `${preferences.quality}:${mobile}`;
+    if (currentQuality !== qualityKey) {
+      currentQuality = qualityKey;
+      renderer.setPixelRatio(Math.min(devicePixelRatio, profile.pixelRatio));
+      renderer.shadowMap.enabled = profile.shadowSize > 0;
+      sun.shadow.map?.dispose();
+      sun.shadow.map = null;
+      sun.shadow.mapSize.set(
+        Math.max(1, profile.shadowSize),
+        Math.max(1, profile.shadowSize),
+      );
+      sun.shadow.needsUpdate = true;
+      starGeo.setDrawRange(0, profile.particles);
+      (scene.fog as THREE.FogExp2).density = 0.002 + 8 / profile.distance;
+    }
+    const now = performance.now();
+    pendingDt += dt;
+    if (now - lastDraw < 1000 / profile.fps - 1) return;
+    lastDraw = now;
+    dt = Math.min(pendingDt, 0.1);
+    pendingDt = 0;
     elapsed += dt;
     ensureSize();
     if (world.job !== playerJob || world.rank !== playerRank) {
       camera.remove(firstPersonRig);
+      releaseModel(firstPersonRig);
       firstPersonRig = buildFirstPersonRig(world.job, world.rank);
       camera.add(firstPersonRig);
       playerJob = world.job;
@@ -3384,19 +3543,23 @@ export function createGame3D(
     lastX = world.x;
     lastY = world.y;
     animateFirstPersonRig(firstPersonRig, world, dt, elapsed, playerSpeedScene);
+    firstPersonRig.scale.setScalar(0.72 * Math.min(1, camera.aspect));
+    firstPersonRig.position.y -= 0.12;
+    firstPersonRig.position.z = -0.45;
     const locomotion = clamp01(playerSpeedScene / 3.8),
       headBob =
         Math.abs(Math.sin(elapsed * (5.2 + playerSpeedScene * 1.5))) *
         0.025 *
-        locomotion;
+        locomotion *
+        preferences.cameraMotion;
     const groundHeight = terrainHeight(world.x, world.y);
     camera.position.set(px, groundHeight + 1.68 + world.height + headBob, pz);
-    landscape.update(world.x, world.y, elapsed, mobile ? 1600 : 2400);
+    landscape.update(world.x, world.y, elapsed, profile.distance);
     hazardRenderer.update(
       world.x,
       world.y,
       world.worldTime || 0,
-      mobile ? 900 : 1600,
+      profile.enemyDistance,
     );
     for (const site of DISCOVERY_SITES) {
       if (site.kind !== 'camp') continue;
@@ -3449,7 +3612,7 @@ export function createGame3D(
       world.x,
       world.y,
       elapsed,
-      mobile ? 800 : 1400,
+      profile.enemyDistance,
     );
     const environment = regionAt(world.x, world.y);
     (scene.background as THREE.Color).lerp(
@@ -3471,10 +3634,11 @@ export function createGame3D(
         (world.attackKind === 'heavy' ? 0.026 : 0.014);
     }
     if (world.hitAnim > 0) cameraRoll += Math.sin(elapsed * 36) * 0.018;
-    camera.rotation.x += cameraKick * 0.009;
-    camera.rotation.z = cameraRoll;
+    camera.rotation.x += cameraKick * 0.009 * preferences.cameraMotion;
+    camera.rotation.z = cameraRoll * preferences.cameraMotion;
     const sprintFov =
-      playerSpeedScene > 4.1 ? (mobile ? 78 : 75) : mobile ? 72 : 68;
+      preferences.fov +
+      (playerSpeedScene > 4.1 ? 6 * preferences.cameraMotion : 0);
     camera.fov = THREE.MathUtils.damp(camera.fov, sprintFov, 7, dt);
     camera.updateProjectionMatrix();
     const buildSite = world.bases.find((site) => !site.complete);
@@ -3554,19 +3718,37 @@ export function createGame3D(
     for (const [id, obj] of mobs)
       if (!activeIds.has(id)) {
         scene.remove(obj);
+        releaseModel(obj);
         mobs.delete(id);
       }
-    let visibleAllies = 0;
-    const detailedAllyLimit = mobile ? 4 : 8;
+    const detailedAllyLimit = profile.allies;
+    const detailedIds = new Set<number>();
+    const nearestAllies = new Set(
+      world.mobs
+        .filter((m) => m.ally && !m.dead)
+        .sort(
+          (a, b) =>
+            Math.hypot(a.x - world.x, a.y - world.y) -
+            Math.hypot(b.x - world.x, b.y - world.y),
+        )
+        .slice(0, detailedAllyLimit)
+        .map((m) => m.id),
+    );
     world.mobs.forEach((mob) => {
       const dx = mob.x - world.x,
         dy = mob.y - world.y,
         dist = Math.hypot(dx, dy),
-        visibleRange = mob.boss ? (mobile ? 2100 : 3200) : mobile ? 1050 : 1650,
-        allyAllowed = !mob.ally || visibleAllies < detailedAllyLimit;
+        visibleRange = mob.boss
+          ? profile.distance + 800
+          : profile.enemyDistance,
+        allyAllowed = !mob.ally || nearestAllies.has(mob.id);
       let obj = mobs.get(mob.id);
-      if (obj && obj.userData.ally !== !!mob.ally) {
+      if (
+        obj &&
+        (obj.userData.ally !== !!mob.ally || dist > visibleRange * 1.35)
+      ) {
         scene.remove(obj);
+        releaseModel(obj);
         mobs.delete(mob.id);
         obj = undefined;
       }
@@ -3578,7 +3760,7 @@ export function createGame3D(
       }
       obj.visible = dist < visibleRange && allyAllowed;
       if (!obj.visible) return;
-      if (mob.ally) visibleAllies++;
+      if (mob.ally) detailedIds.add(mob.id);
       const mobData = obj.userData;
       const previousX = mobData.prevX as number,
         previousY = mobData.prevY as number,
@@ -3614,29 +3796,43 @@ export function createGame3D(
         mob.ally ? 0x4de0b2 : mob.boss ? 0xff375f : 0xe95872,
       );
     });
-    const proxyCapacity = mobile ? 24 : 48,
-      proxyCount = Math.min(
-        proxyCapacity,
-        Math.max(0, world.minions - visibleAllies),
-      ),
-      forwardX = Math.sin(world.viewYaw),
-      forwardZ = Math.cos(world.viewYaw),
-      rightX = Math.cos(world.viewYaw),
-      rightZ = -Math.sin(world.viewYaw);
+    // LOD models represent real units at their actual positions, never invented troops.
+    const proxyUnits = world.mobs
+      .filter(
+        (m) =>
+          m.ally &&
+          !m.dead &&
+          !detailedIds.has(m.id) &&
+          Math.hypot(m.x - world.x, m.y - world.y) < profile.distance,
+      )
+      .slice(0, mobile ? 24 : 48);
+    const proxyCount = proxyUnits.length;
     armyBody.count = armyHead.count = proxyCount;
     for (let i = 0; i < proxyCount; i++) {
-      const row = Math.floor(i / 5),
-        column = (i % 5) - 2,
-        march = Math.sin(elapsed * 5.4 + i * 0.9) * 0.035,
-        ax = px - forwardX * (2.4 + row * 0.82) + rightX * column * 0.64,
-        az = pz - forwardZ * (2.4 + row * 0.82) + rightZ * column * 0.64;
-      armyDummy.position.set(ax, 0.72 + march, az);
-      armyDummy.rotation.set(0, world.viewYaw, 0);
-      armyDummy.scale.set(0.3, 0.72, 0.3);
+      const unit = proxyUnits[i],
+        scale =
+          unit.kind === 'armored'
+            ? 1.6
+            : unit.kind === 'golem'
+              ? 1.3
+              : unit.kind === 'imp'
+                ? 0.65
+                : 1,
+        ground = terrainHeight(unit.x, unit.y),
+        march = Math.sin(elapsed * 3 + unit.id) * 0.012,
+        ax = worldX(unit.x),
+        az = worldZ(unit.y);
+      armyDummy.position.set(ax, ground + (0.72 + march) * scale, az);
+      armyDummy.rotation.set(
+        0,
+        Math.atan2(world.x - unit.x, world.y - unit.y),
+        0,
+      );
+      armyDummy.scale.set(0.3 * scale, 0.72 * scale, 0.3 * scale);
       armyDummy.updateMatrix();
       armyBody.setMatrixAt(i, armyDummy.matrix);
-      armyDummy.position.y = 1.38 + march;
-      armyDummy.scale.set(0.24, 0.24, 0.24);
+      armyDummy.position.y = ground + (1.38 + march) * scale;
+      armyDummy.scale.setScalar(0.24 * scale);
       armyDummy.updateMatrix();
       armyHead.setMatrixAt(i, armyDummy.matrix);
     }
@@ -3659,7 +3855,8 @@ export function createGame3D(
         scene.add(obj);
       }
       obj.visible =
-        Math.hypot(node.x - world.x, node.y - world.y) < (mobile ? 620 : 820);
+        Math.hypot(node.x - world.x, node.y - world.y) <
+        profile.enemyDistance * 0.65;
       obj.position.set(
         worldX(node.x),
         terrainHeight(node.x, node.y),
@@ -3704,8 +3901,10 @@ export function createGame3D(
       );
     });
     if (bossImpact) {
-      camera.position.x += Math.sin(elapsed * 53) * 0.025;
-      camera.position.y += Math.cos(elapsed * 47) * 0.018;
+      camera.position.x +=
+        Math.sin(elapsed * 53) * 0.025 * preferences.cameraMotion;
+      camera.position.y +=
+        Math.cos(elapsed * 47) * 0.018 * preferences.cameraMotion;
     }
     sun.position.set(px - 8, groundHeight + 14, pz + 7);
     sun.target.position.set(px, groundHeight, pz);
@@ -3713,8 +3912,24 @@ export function createGame3D(
     embers.position.set(px, groundHeight, pz);
     embers.rotation.y = elapsed * 0.015;
     renderer.render(scene, camera);
+    sampleFrames++;
+    sampleTime += performance.now() - now;
+    if (now - sampleStarted >= 1500) {
+      onPerformance?.({
+        fps: (sampleFrames * 1000) / (now - sampleStarted),
+        frameMs: sampleTime / sampleFrames,
+        drawCalls: renderer.info.render.calls,
+        triangles: renderer.info.render.triangles,
+        geometries: renderer.info.memory.geometries,
+        textures: renderer.info.memory.textures,
+      });
+      sampleStarted = now;
+      sampleFrames = 0;
+      sampleTime = 0;
+    }
   };
   const dispose = () => {
+    reflectionMap.dispose();
     landscape.dispose();
     lootRenderer.dispose();
     hazardRenderer.dispose();

@@ -1,0 +1,118 @@
+.preferences-content section {
+  padding: 16px;
+  margin-bottom: 16px;
+  border: 1px solid #72838d55;
+  border-radius: 8px;
+  background: #0b1420;
+}
+.preferences-content h3 {
+  margin: 0 0 16px;
+  color: #f1d7ac;
+}
+.preferences-content p {
+  margin: 12px 0 0;
+  color: #b8c5d0;
+  line-height: 1.7;
+}
+.quality-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.quality-options button {
+  border: 1px solid #72838d88;
+  border-radius: 6px;
+  background: #1e2c3a;
+  color: #eee4d5;
+  padding: 12px 6px;
+  font-size: 18px;
+}
+.quality-options button[aria-pressed='true'] {
+  border-color: #e5c58a;
+  background: #484233;
+}
+.quality-options small {
+  display: block;
+  margin-top: 4px;
+}
+.preference-range {
+  margin: 16px 0;
+}
+.preference-range > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 15px;
+}
+.preference-range output {
+  color: #ffdc9c;
+  font-variant-numeric: tabular-nums;
+}
+.preference-range [data-slot='slider'] {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+}
+.preference-range [data-slot='slider-track'] {
+  height: 6px;
+  background: #44505b;
+}
+.preference-range [data-slot='slider-range'] {
+  background: #c3a56f;
+}
+.preference-range [data-slot='slider-thumb'] {
+  width: 24px;
+  height: 24px;
+  background: #f7e3bd;
+  border-color: #a99370;
+}
+.preference-switch {
+  display: flex;
+  min-height: 54px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.preference-switch [data-slot='switch'] {
+  min-height: 32px;
+  height: 32px;
+  width: 56px;
+  background: #3d4b57;
+}
+.preference-switch [data-slot='switch'][data-checked] {
+  background: #4b907d;
+}
+.preference-switch [data-slot='switch-thumb'] {
+  width: 26px;
+  height: 26px;
+  background: #eae3d4;
+}
+.performance-readout {
+  display: grid;
+  gap: 6px;
+  color: #c7d2db;
+  font-size: 14px;
+}
+.performance-readout b {
+  color: #9be3c7;
+  font-size: 22px;
+}
+@media (max-width: 600px) {
+  .quality-options {
+    grid-template-columns: 1fr;
+  }
+  .quality-options button {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-align: left;
+    padding: 10px 14px;
+  }
+  .quality-options small {
+    margin: 0;
+  }
+  .preferences-content section {
+    padding: 12px;
+  }
+}
