@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { sceneryInsideBuilding, type StructureSite } from './structures';
 import { textureSurface, type RealmTextures } from './realm-textures';
 import {
   DISCOVERY_SITES,
@@ -86,25 +87,62 @@ export function createLandscape(scene: THREE.Scene, textures: RealmTextures) {
     // Solid pitched roof: two weathered timber slopes, ridge and supporting rafters.
     put(root, 'box', 'wood', [4.5, 0.16, 4.6], [x, 2.88, z]);
     for (const side of [-1, 1]) {
-      const roof = put(root, 'box', 'wood', [2.72, 0.18, 5.1], [x + side * 1.2, 3.5, z]);
+      const roof = put(
+        root,
+        'box',
+        'wood',
+        [2.72, 0.18, 5.1],
+        [x + side * 1.2, 3.5, z],
+      );
       roof.rotation.z = -side * 0.47;
       for (const end of [-2.38, 2.38]) {
-        const rafter = put(root, 'box', 'wood', [2.78, 0.21, 0.2], [x + side * 1.2, 3.4, z + end]);
+        const rafter = put(
+          root,
+          'box',
+          'wood',
+          [2.78, 0.21, 0.2],
+          [x + side * 1.2, 3.4, z + end],
+        );
         rafter.rotation.z = -side * 0.47;
       }
       for (const end of [-2.12, 2.12]) {
-        put(root, 'box', 'wood', [0.19, 2.85, 0.19], [x + side * 1.96, 1.43, z + end]);
-        put(root, 'box', 'stone', [0.34, 0.25, 0.34], [x + side * 1.96, 0.12, z + end]);
+        put(
+          root,
+          'box',
+          'wood',
+          [0.19, 2.85, 0.19],
+          [x + side * 1.96, 1.43, z + end],
+        );
+        put(
+          root,
+          'box',
+          'stone',
+          [0.34, 0.25, 0.34],
+          [x + side * 1.96, 0.12, z + end],
+        );
       }
     }
     put(root, 'box', 'wood', [0.23, 0.24, 5.2], [x, 4.1, z]);
     for (const end of [-2.05, 2.05]) {
       for (let beam = -3; beam <= 3; beam++) {
         const height = 1.1 - Math.abs(beam) * 0.26;
-        put(root, 'box', 'wood', [0.51, height, 0.16], [x + beam * 0.53, 2.95 + height / 2, z + end]);
+        put(
+          root,
+          'box',
+          'wood',
+          [0.51, height, 0.16],
+          [x + beam * 0.53, 2.95 + height / 2, z + end],
+        );
       }
       // The door remains open; jambs follow the authoritative wall's central gap.
-      for (const side of [-1, 1]) put(root, 'box', 'wood', [0.12, 2.35, 0.25], [x + side * 0.76, 1.175, z + end]);
+      for (const side of [-1, 1])
+        put(
+          root,
+          'box',
+          'wood',
+          [0.12, 2.35, 0.25],
+          [x + side * 0.76, 1.175, z + end],
+        );
     }
     put(root, 'box', 'stone', [0.6, 1.8, 0.64], [x + 1.1, 3.45, z + 1.25]);
     put(root, 'box', 'stone', [0.78, 0.16, 0.8], [x + 1.1, 4.4, z + 1.25]);
@@ -244,7 +282,7 @@ export function createLandscape(scene: THREE.Scene, textures: RealmTextures) {
     root.userData.site = s.id;
     return root;
   };
-  const buildChunk = (cx: number, cy: number) => {
+  const buildChunk = (cx: number, cy: number, buildings: StructureSite[]) => {
     const root = new THREE.Group(),
       x0 = cx * 800,
       y0 = cy * 800;
@@ -268,9 +306,11 @@ export function createLandscape(scene: THREE.Scene, textures: RealmTextures) {
         x = x0 + random(seed) * 800,
         y = y0 + random(seed + 9) * 800,
         h = terrainHeight(x, y);
-      const inSite = DISCOVERY_SITES.some(
-        (s) => Math.abs(s.x - x) < 260 && Math.abs(s.y - y) < 260,
-      );
+      const inSite =
+        sceneryInsideBuilding({ x, y }, buildings) ||
+        DISCOVERY_SITES.some(
+          (s) => Math.abs(s.x - x) < 260 && Math.abs(s.y - y) < 260,
+        );
       const s = inSite ? 0.001 : 0.35 + random(seed + 7) * 1.4;
       dummy.position.set(worldX(x), h + s * 0.35, worldZ(y));
       dummy.scale.set(s, s * 0.65, s * 0.8);
@@ -303,8 +343,32 @@ export function createLandscape(scene: THREE.Scene, textures: RealmTextures) {
     return root;
   };
   let lastCell = '';
+  let lastBuildings = '';
   return {
-    update(x: number, y: number, time: number, distance = 2200) {
+    update(
+      x: number,
+      y: number,
+      time: number,
+      distance = 2200,
+      buildings: StructureSite[] = [],
+    ) {
+      const signature = buildings
+        .map(
+          (site) => `${site.id}:${site.kind}:${site.x}:${site.y}:${site.yaw}`,
+        )
+        .join('|');
+      if (signature !== lastBuildings) {
+        lastBuildings = signature;
+        lastCell = '';
+        // Changes are rare. Rebuild only bounded active scenery, not the world.
+        for (const chunk of chunks.values()) {
+          scene.remove(chunk);
+          chunk.traverse((object) => {
+            if (object instanceof THREE.InstancedMesh) object.dispose();
+          });
+        }
+        chunks.clear();
+      }
       const cell = `${Math.floor(x / 400)},${Math.floor(y / 400)},${distance}`;
       if (cell !== lastCell) {
         lastCell = cell;
@@ -332,7 +396,7 @@ export function createLandscape(scene: THREE.Scene, textures: RealmTextures) {
             const key = `${cx},${cy}`;
             keep.add(key);
             if (!chunks.has(key)) {
-              const chunk = buildChunk(cx, cy);
+              const chunk = buildChunk(cx, cy, buildings);
               chunks.set(key, chunk);
               scene.add(chunk);
             }

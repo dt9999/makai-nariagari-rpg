@@ -29,7 +29,21 @@ import { InventoryPanel } from './inventory-panel';
 import { RealmMap } from './realm-map';
 import { PreferencesPanel } from './preferences-panel';
 import { TutorialHint, TutorialPanel } from './tutorial-panel';
-import { newTutorial, completeLesson, recordTutorialMotion, type TutorialState } from './tutorial';
+import {
+  newTutorial,
+  completeLesson,
+  recordTutorialMotion,
+  type TutorialState,
+} from './tutorial';
+import {
+  moveAroundBuildings,
+  plannedBuilding,
+  placementIssue,
+  constructionApproach,
+  constructionWork,
+  clearBuildingSight,
+  type StructureKind,
+} from './structures';
 import {
   DEFAULT_PREFERENCES,
   sanitizePreferences,
@@ -60,8 +74,6 @@ import {
   type WorldLoot,
 } from './items';
 import {
-  WORLD_WIDTH,
-  WORLD_HEIGHT,
   REGIONS,
   DISCOVERY_SITES,
   SITE_LABELS,
@@ -70,8 +82,6 @@ import {
   sitesIn,
   headquartersOf,
   nearbyInteraction,
-  moveOnGround,
-  positionBlocked,
   hazardAt,
   hazardDamage,
   hazardPhase,
@@ -130,6 +140,8 @@ type Mob = {
   anchorY?: number;
   rare?: boolean;
   patrol?: 'sentinel' | 'ambush' | 'roam';
+  working?: boolean;
+  workYaw?: number;
 };
 type Node = {
   id: number;
@@ -163,18 +175,7 @@ type MinionUnit = {
   assignment: MinionTask;
   aptitudes: Record<MinionTask, number>;
 };
-type BuildingKind =
-  | 'hideout'
-  | 'storage'
-  | 'barracks'
-  | 'smithy'
-  | 'laboratory'
-  | 'watchtower'
-  | 'wall'
-  | 'gate'
-  | 'fortress'
-  | 'castle'
-  | 'demon-castle';
+type BuildingKind = StructureKind;
 type BaseSite = {
   id: number;
   x: number;
@@ -187,6 +188,7 @@ type BaseSite = {
   duration: number;
   complete: boolean;
   workers: number;
+  playerWorking?: boolean;
 };
 type BindingAction =
   | 'forward'
@@ -1393,7 +1395,10 @@ export default function Home() {
     () =>
       setHud({
         ...game.current,
-        tutorial: { ...game.current.tutorial, completed: [...game.current.tutorial.completed] },
+        tutorial: {
+          ...game.current.tutorial,
+          completed: [...game.current.tutorial.completed],
+        },
         stats: { ...game.current.stats },
         inventory: (game.current.inventory || []).map((stack) => ({
           ...stack,
@@ -1462,7 +1467,12 @@ export default function Home() {
       inventoryOpen ||
       adventureOpen ||
       guideOpen;
-    if (inventoryOpen && game.current.job && completeLesson(game.current.tutorial, 'inventory')) sync();
+    if (
+      inventoryOpen &&
+      game.current.job &&
+      completeLesson(game.current.tutorial, 'inventory')
+    )
+      sync();
     if (menuOpenRef.current) {
       keys.current = {};
       stick.current = { x: 0, y: 0, on: false };
@@ -1525,7 +1535,11 @@ export default function Home() {
         const distance = d(w, mob) || 1;
         const aim =
           ((mob.x - w.x) * w.facingX + (mob.y - w.y) * w.facingY) / distance;
-        return distance < range && aim > cone;
+        return (
+          distance < range &&
+          aim > cone &&
+          clearBuildingSight(w, mob, w.bases, w.height + 0.9)
+        );
       })
       .sort((a, b) => d(w, a) - d(w, b));
   const jump = () => {
@@ -1768,9 +1782,10 @@ export default function Home() {
     w.dodgeTime = 0.48;
     Object.assign(
       w,
-      moveOnGround(
+      moveAroundBuildings(
         w,
         { x: w.x + w.facingX * 95, y: w.y + w.facingY * 95 },
+        w.bases,
         w.height,
       ),
     );
@@ -1780,7 +1795,8 @@ export default function Home() {
   const useCombatSkill = () => {
     let w = game.current;
     if (!w.job) return;
-    if (w.skillCd > 0) return say(`スキルはあと${Math.ceil(w.skillCd)}秒で使用可能。`);
+    if (w.skillCd > 0)
+      return say(`スキルはあと${Math.ceil(w.skillCd)}秒で使用可能。`);
     if (w.energy < 35) return say('スキルにはスタミナ35が必要。');
     let j = jobOf(w),
       targets = targetsAhead(w, 155 * j.range, 0.05).slice(0, 6);
@@ -2049,43 +2065,33 @@ export default function Home() {
       w.buildMode = false;
       return say('建築中に必要素材が不足した。');
     }
-    const buildAt = {
-      x: Math.max(100, Math.min(WORLD_WIDTH - 100, w.x + w.facingX * 320)),
-      y: Math.max(100, Math.min(WORLD_HEIGHT - 100, w.y + w.facingY * 320)),
-    };
-    if (
-      positionBlocked(buildAt.x, buildAt.y, 100) ||
-      hazardAt(buildAt.x, buildAt.y)
-    )
-      return say('ここには壁や危険地帯がある。別の予定地を選ぼう。');
-    const builders = w.roster.filter((unit) => unit.assignment === 'build'),
-      builderPower = builders.reduce(
-        (total, unit) => total + unit.aptitudes.build,
-        0,
-      ),
-      estimatedDuration = Math.max(
-        definition.seconds * 0.34,
-        definition.seconds / (1 + Math.sqrt(builderPower) * 0.34),
-      );
+    const buildAt = plannedBuilding(w);
+    const invalid = placementIssue(
+      buildAt,
+      w.bases,
+      w,
+      w.nodes.filter((node) => node.n > 0),
+    );
+    if (invalid) return say(invalid);
     w.wood -= definition.wood;
     w.ore -= definition.ore;
     completeLesson(w.tutorial, 'build');
-    w.buildAnim = estimatedDuration;
+    w.buildAnim = 0;
     w.buildMode = false;
     w.bases.push({
       id: w.bases.length + 1,
-      x: Math.max(100, Math.min(WORLD_WIDTH - 100, w.x + w.facingX * 320)),
-      y: Math.max(100, Math.min(WORLD_HEIGHT - 100, w.y + w.facingY * 320)),
-      yaw: w.viewYaw,
+      x: buildAt.x,
+      y: buildAt.y,
+      yaw: buildAt.yaw,
       level: w.rank + 1,
       kind: definition.id,
       name: definition.name,
       progress: 0,
       duration: definition.seconds,
       complete: false,
-      workers: builders.length,
+      workers: 0,
     });
-    w.message = `${definition.name}を着工。建築担当${builders.length}体＋主人公、完成予定${Math.ceil(estimatedDuration)}秒。`;
+    w.message = `${definition.name}を着工。正面へ近づき、建物を見て立ち止まると作業。建築担当の配下も現地へ向かいます。`;
     sync();
   };
   const raid = () => {
@@ -2142,8 +2148,10 @@ export default function Home() {
   };
   const updateJoystick = (event: React.PointerEvent<HTMLDivElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
-    const x = (event.clientX - rect.left - rect.width / 2) / (rect.width * 0.42);
-    const y = (event.clientY - rect.top - rect.height / 2) / (rect.height * 0.42);
+    const x =
+      (event.clientX - rect.left - rect.width / 2) / (rect.width * 0.42);
+    const y =
+      (event.clientY - rect.top - rect.height / 2) / (rect.height * 0.42);
     const length = Math.max(1, Math.hypot(x, y));
     stick.current = { x: x / length, y: y / length, on: true };
   };
@@ -2249,12 +2257,14 @@ export default function Home() {
           mouseLook.on = true;
           mouseLook.x = e.clientX;
           mouseLook.y = e.clientY;
-          if (!pointerLockUnavailable && c.requestPointerLock) void c.requestPointerLock().catch(() => {
-            pointerLockUnavailable = true;
-            setDragLookOnly(true);
-            game.current.message = 'この画面では視点固定が使えません。左ドラッグで見回せます。攻撃は画面下のボタンから。';
-            sync();
-          });
+          if (!pointerLockUnavailable && c.requestPointerLock)
+            void c.requestPointerLock().catch(() => {
+              pointerLockUnavailable = true;
+              setDragLookOnly(true);
+              game.current.message =
+                'この画面では視点固定が使えません。左ドラッグで見回せます。攻撃は画面下のボタンから。';
+              sync();
+            });
           return;
         }
         if (game.current.buildMode) confirmBuild();
@@ -2271,7 +2281,8 @@ export default function Home() {
     };
     const mouseMove = (e: MouseEvent) => {
       if (menuOpenRef.current) return;
-      if (document.pointerLockElement === c) rotateView(e.movementX, e.movementY);
+      if (document.pointerLockElement === c)
+        rotateView(e.movementX, e.movementY);
       else if (mouseLook.on) {
         rotateView(e.clientX - mouseLook.x, e.clientY - mouseLook.y);
         mouseLook.x = e.clientX;
@@ -2393,7 +2404,12 @@ export default function Home() {
             (1 + w.stats.agility * 0.018) *
             (w.unlocked.includes('step') ? 1.15 : 1)
           : 0,
-        sprinting = (held('sprint') || (stick.current.on && Math.hypot(stick.current.x, stick.current.y) > 0.92)) && intent > 0.2 && w.energy > 1,
+        sprinting =
+          (held('sprint') ||
+            (stick.current.on &&
+              Math.hypot(stick.current.x, stick.current.y) > 0.92)) &&
+          intent > 0.2 &&
+          w.energy > 1,
         sprintBoost = sprinting ? 1.58 : 1,
         actionSlow =
           w.attackAnim > 0
@@ -2409,12 +2425,13 @@ export default function Home() {
       const previousPosition = { x: w.x, y: w.y };
       Object.assign(
         w,
-        moveOnGround(
+        moveAroundBuildings(
           w,
           {
             x: w.x + directionX * move * sprintBoost * intent * dt * actionSlow,
             y: w.y + directionY * move * sprintBoost * intent * dt * actionSlow,
           },
+          w.bases,
           w.height,
         ),
       );
@@ -2442,23 +2459,47 @@ export default function Home() {
       w.attackAnim = Math.max(0, w.attackAnim - dt);
       if (w.attackAnim <= 0) w.attackKind = 'none';
       w.hitAnim = Math.max(0, w.hitAnim - dt);
-      const incompleteSites = w.bases.filter((site) => !site.complete),
-        builderPower = taskPower(w, 'build'),
-        buildersPerSite = incompleteSites.length
-          ? builderPower / incompleteSites.length
-          : 0,
-        constructionRate = Math.min(
-          1 / 0.34,
-          1 + Math.sqrt(buildersPerSite) * 0.34,
-        );
+      const incompleteSites = w.bases.filter((site) => !site.complete);
+      const builders = new globalThis.Map(
+        w.roster
+          .filter((unit) => unit.assignment === 'build')
+          .map((unit) => [unit.id, unit]),
+      );
+      const work = constructionWork(
+        w.bases,
+        w.mobs
+          .filter(
+            (mob) =>
+              mob.ally &&
+              !mob.dead &&
+              !(mob.attackAnim || 0) &&
+              builders.has(mob.id),
+          )
+          .map((mob) => ({
+            id: mob.id,
+            x: mob.x,
+            y: mob.y,
+            power: builders.get(mob.id)!.aptitudes.build,
+          })),
+        {
+          x: w.x,
+          y: w.y,
+          viewYaw: w.viewYaw,
+          canWork:
+            intent < 0.1 &&
+            w.grounded &&
+            !w.guarding &&
+            !w.attackAnim &&
+            !w.buildMode &&
+            !w.dodgeTime,
+        },
+      );
       incompleteSites.forEach((site) => {
-        site.workers = Math.floor(
-          w.roster.filter((unit) => unit.assignment === 'build').length /
-            incompleteSites.length,
-        );
+        site.workers = work.present.get(site.id)?.length || 0;
+        site.playerWorking = work.playerSite?.id === site.id;
         site.progress = Math.min(
           site.duration,
-          site.progress + dt * constructionRate,
+          site.progress + dt * (work.rates.get(site.id) || 0),
         );
         if (site.progress >= site.duration) {
           site.complete = true;
@@ -2466,10 +2507,10 @@ export default function Home() {
           w.maxHp += 12;
           w.hp = w.maxHp;
           w.achievements++;
-          w.message = `${site.name}が完成！ 内部と固有設備を利用できる。`;
+          w.message = `${site.name}が完成！ ${site.kind === 'wall' ? '城壁が通行を遮り、拠点を囲めます。' : site.kind === 'gate' ? '中央の城門を通行できます。' : '正面の入口から中へ入れます。'}`;
         }
       });
-      w.buildAnim = incompleteSites.some((site) => !site.complete) ? 1 : 0;
+      w.buildAnim = work.playerSite && !work.playerSite.complete ? 1 : 0;
       w.workClock += dt;
       if (w.workClock >= 8) {
         w.workClock -= 8;
@@ -2541,13 +2582,28 @@ export default function Home() {
       w.pendingHits = w.pendingHits.filter((hit) => hit.delay > 0);
       impacts.forEach((hit) => {
         let t = w.mobs.find((m) => m.id === hit.target);
-        if (!t || t.dead || t.ally) return;
+        if (
+          !t ||
+          t.dead ||
+          t.ally ||
+          !clearBuildingSight(w, t, w.bases, w.height + 0.9)
+        )
+          return;
         t.hp -= hit.damage;
         t.hitAnim = 0.34;
         if (hit.knockback) {
           let q = d(w, t) || 1;
-          t.x += ((t.x - w.x) / q) * hit.knockback;
-          t.y += ((t.y - w.y) / q) * hit.knockback;
+          Object.assign(
+            t,
+            moveAroundBuildings(
+              t,
+              {
+                x: t.x + ((t.x - w.x) / q) * hit.knockback,
+                y: t.y + ((t.y - w.y) / q) * hit.knockback,
+              },
+              w.bases,
+            ),
+          );
         }
         if (t.hp <= 0) defeat(w, t);
       });
@@ -2591,6 +2647,8 @@ export default function Home() {
         (site) => site.kind === 'camp' && d(w, site) < 190,
       );
       w.mobs.forEach((m) => {
+        const previousMobPosition = { x: m.x, y: m.y };
+        m.working = false;
         m.attackCd = Math.max(0, (m.attackCd || 0) - dt);
         m.hitAnim = Math.max(0, (m.hitAnim || 0) - dt);
         if (m.dead) {
@@ -2650,7 +2708,8 @@ export default function Home() {
             const completedBase = [...w.bases]
                 .reverse()
                 .find((site) => site.complete),
-              construction = w.bases.find((site) => !site.complete),
+              construction =
+                assignment === 'build' ? work.assignments.get(m.id) : undefined,
               resource =
                 assignment === 'gather' || assignment === 'mine'
                   ? w.nodes
@@ -2667,23 +2726,42 @@ export default function Home() {
                 assignment === 'build' && construction
                   ? construction
                   : resource || completedBase || w,
+              approach =
+                construction && !construction.complete
+                  ? constructionApproach(construction, m)
+                  : undefined,
               targetX =
+                approach?.x ??
                 anchor.x +
-                Math.cos(
-                  m.id * 2.17 + now * (assignment === 'scout' ? 0.00035 : 0),
-                ) *
-                  (scoutDistance || 55 + (m.id % 4) * 24),
+                  Math.cos(
+                    m.id * 2.17 + now * (assignment === 'scout' ? 0.00035 : 0),
+                  ) *
+                    (scoutDistance || 55 + (m.id % 4) * 24),
               targetY =
+                approach?.y ??
                 anchor.y +
-                Math.sin(
-                  m.id * 1.73 + now * (assignment === 'scout' ? 0.00035 : 0),
-                ) *
-                  (scoutDistance || 55 + (m.id % 4) * 24),
+                  Math.sin(
+                    m.id * 1.73 + now * (assignment === 'scout' ? 0.00035 : 0),
+                  ) *
+                    (scoutDistance || 55 + (m.id % 4) * 24),
               workDistance = Math.hypot(targetX - m.x, targetY - m.y) || 1;
             if (workDistance > 38 && !(m.attackAnim || 0)) {
               const workSpeed = Math.max(34, behavior.speed * 0.78);
               m.x += ((targetX - m.x) / workDistance) * workSpeed * dt;
               m.y += ((targetY - m.y) / workDistance) * workSpeed * dt;
+            }
+            if (
+              construction &&
+              !construction.complete &&
+              work.present
+                .get(construction.id)
+                ?.some((worker) => worker.id === m.id)
+            ) {
+              m.working = true;
+              m.workYaw = Math.atan2(
+                construction.x - m.x,
+                construction.y - m.y,
+              );
             }
           }
         } else {
@@ -2745,6 +2823,7 @@ export default function Home() {
             }
           }
         }
+        Object.assign(m, moveAroundBuildings(previousMobPosition, m, w.bases));
         if ((m.attackAnim || 0) > 0) {
           let progress = 1 - (m.attackAnim || 0) / (m.attackTotal || 0.78);
           if (progress > 0.5 && !m.attackHit) {
@@ -2753,7 +2832,11 @@ export default function Home() {
               let victim = w.mobs.find(
                 (x) => x.id === m.attackTarget && !x.dead && !x.ally,
               );
-              if (victim && d(m, victim) < reach + 25) {
+              if (
+                victim &&
+                d(m, victim) < reach + 25 &&
+                clearBuildingSight(m, victim, w.bases)
+              ) {
                 const barracksBonus = w.bases.some(
                     (site) => site.complete && site.kind === 'barracks',
                   )
@@ -2781,7 +2864,12 @@ export default function Home() {
                 victim.hitAnim = 0.3;
                 if (victim.hp <= 0) defeat(w, victim);
               }
-            } else if (!safeCamp && d(w, m) < reach + 28 && w.dodgeTime <= 0) {
+            } else if (
+              !safeCamp &&
+              d(w, m) < reach + 28 &&
+              w.dodgeTime <= 0 &&
+              clearBuildingSight(m, w, w.bases, 0.9, w.height + 0.9)
+            ) {
               let branchGuard =
                   1 - w.unlocked.filter((s) => s.endsWith('b')).length * 0.08,
                 harm = Math.max(
@@ -2862,12 +2950,23 @@ export default function Home() {
     interaction = nearbyInteraction(hud, hud.loot, hud.nodes),
     currentHazard = hazardAt(hud.x, hud.y),
     currentOwner = ownerOf(hud, current),
-    inCombat = !sitesIn(current.id).some(site => site.kind === 'camp' && d(hud, site) < 190) && hud.mobs.some(mob => !mob.dead && !mob.ally && d(hud, mob) < 240),
+    inCombat =
+      !sitesIn(current.id).some(
+        (site) => site.kind === 'camp' && d(hud, site) < 190,
+      ) && hud.mobs.some((mob) => !mob.dead && !mob.ally && d(hud, mob) < 240),
     need = hud.lv * 34,
     ready = canRank(hud),
     currentJob = JOBS.find((j) => j.id === hud.job),
     milestoneGroups = currentJob ? milestonesFor(currentJob.id) : [],
     activeConstructions = hud.bases.filter((site) => !site.complete),
+    buildIssue = hud.buildMode
+      ? placementIssue(
+          plannedBuilding(hud),
+          hud.bases,
+          hud,
+          hud.nodes.filter((node) => node.n > 0),
+        )
+      : null,
     taskCounts = Object.fromEntries(
       MINION_TASKS.map((task) => [
         task.id,
@@ -2886,10 +2985,31 @@ export default function Home() {
         }
         className={`game-frame open-world ${hud.job ? 'playing' : 'choosing'} ${mapOpen || rankOpen || growthOpen || transferOpen || controlsOpen || minionOpen || buildMenuOpen || inventoryOpen || adventureOpen || guideOpen ? 'menu-visible' : ''}`}
       >
-        {hud.job && !hud.buildMode && !activeConstructions.length && !currentHazard && !inCombat && (
-          <TutorialHint state={hud.tutorial} onOpen={() => openScreen('guide')} onHide={() => { game.current.tutorial.hidden = true; sync(); }} />
+        {hud.job &&
+          !hud.buildMode &&
+          !activeConstructions.length &&
+          !currentHazard &&
+          !inCombat && (
+            <TutorialHint
+              state={hud.tutorial}
+              onOpen={() => openScreen('guide')}
+              onHide={() => {
+                game.current.tutorial.hidden = true;
+                sync();
+              }}
+            />
+          )}
+        {guideOpen && (
+          <TutorialPanel
+            state={hud.tutorial}
+            bindings={bindings}
+            onClose={() => setGuideOpen(false)}
+            onToggle={() => {
+              game.current.tutorial.hidden = !game.current.tutorial.hidden;
+              sync();
+            }}
+          />
         )}
-        {guideOpen && <TutorialPanel state={hud.tutorial} bindings={bindings} onClose={() => setGuideOpen(false)} onToggle={() => { game.current.tutorial.hidden = !game.current.tutorial.hidden; sync(); }} />}
         {hud.job && (
           <AdventureHUD
             world={hud}
@@ -3064,21 +3184,26 @@ export default function Home() {
             {!pointerLocked && (
               <div className="fps-lock-hint">
                 <Crosshair size={13} />
-                {dragLookOnly ? '左ドラッグで見回す · 攻撃は下のボタン' : '画面をクリックして視点固定'}
+                {dragLookOnly
+                  ? '左ドラッグで見回す · 攻撃は下のボタン'
+                  : '画面をクリックして視点固定'}
               </div>
             )}
           </>
         )}
         {hud.buildMode && (
-          <div className="build-placement">
+          <div className={'build-placement' + (buildIssue ? ' invalid' : '')}>
             <Hammer size={15} />
             <div>
               <b>{buildingOf(hud.selectedBuilding).name}を配置</b>
               <span>
-                視点で位置・向きを確認　左クリック：決定 / 右クリック：取消
+                {buildIssue ||
+                  '緑の予定地を確認して「着工」。歩いて配置場所・視点で向きを調整。'}
               </span>
             </div>
-            <button onClick={confirmBuild}>着工</button>
+            <button onClick={confirmBuild} disabled={!!buildIssue}>
+              着工
+            </button>
             <button onClick={build}>取消</button>
           </div>
         )}
@@ -3551,14 +3676,7 @@ export default function Home() {
             <div className="building-grid">
               {BUILDINGS.map((building) => {
                 const locked = hud.rank < building.rank,
-                  short = hud.wood < building.wood || hud.ore < building.ore,
-                  power = taskPower(hud, 'build'),
-                  estimate = Math.ceil(
-                    Math.max(
-                      building.seconds * 0.34,
-                      building.seconds / (1 + Math.sqrt(power) * 0.34),
-                    ),
-                  );
+                  short = hud.wood < building.wood || hud.ore < building.ore;
                 return (
                   <button
                     key={building.id}
@@ -3578,14 +3696,14 @@ export default function Home() {
                     <em>
                       {locked
                         ? `RANK ${RANKS[building.rank]}で解放`
-                        : `完成予測 約${estimate}秒`}
+                        : `ひとりの実作業 ${building.seconds}秒`}
                     </em>
                   </button>
                 );
               })}
             </div>
             <p className="build-help">
-              選択後、半透明の完成予定を一人称視点で確認できます。左クリックで着工、右クリックで取消。
+              緑の予定地で「着工」。正面に近づき、建物を見て立ち止まると作業できます。建築班は現地到着後に参加。移動・待機時間は作業時間に含みません。
             </p>
           </GamePanel>
         )}
@@ -3706,7 +3824,14 @@ export default function Home() {
                   <i>
                     <em style={{ width: `${progress}%` }} />
                   </i>
-                  <small>建築班 {site.workers}体 + 主人公</small>
+                  <small>
+                    {site.playerWorking
+                      ? '主人公が作業中'
+                      : site.workers
+                        ? '配下が作業中'
+                        : '正面へ近づき、建物を見ると作業'}
+                    {site.workers > 0 && ` · ${site.workers}体`}
+                  </small>
                 </div>
               );
             })}
@@ -3809,20 +3934,29 @@ export default function Home() {
           role="group"
           aria-label="移動スティック。外側でダッシュ"
           onPointerDown={(e) => {
-            if (joystickPointer.current !== null && e.currentTarget.hasPointerCapture(joystickPointer.current)) return;
+            if (
+              joystickPointer.current !== null &&
+              e.currentTarget.hasPointerCapture(joystickPointer.current)
+            )
+              return;
             joystickPointer.current = e.pointerId;
             (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
             updateJoystick(e);
           }}
           onPointerMove={(e) => {
-            if (!stick.current.on || e.pointerId !== joystickPointer.current) return;
+            if (!stick.current.on || e.pointerId !== joystickPointer.current)
+              return;
             updateJoystick(e);
           }}
           onPointerUp={releaseJoystick}
           onPointerCancel={releaseJoystick}
           onLostPointerCapture={releaseJoystick}
         >
-          <i style={{ transform: `translate(${stick.current.x * 28}px, ${stick.current.y * 28}px)` }} />
+          <i
+            style={{
+              transform: `translate(${stick.current.x * 28}px, ${stick.current.y * 28}px)`,
+            }}
+          />
         </div>
         <div className="hint">
           <Binoculars size={14} />

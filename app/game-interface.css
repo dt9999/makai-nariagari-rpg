@@ -334,7 +334,8 @@
   font-size: 13px;
 }
 .immersive-shell .construction-status small {
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 1.5;
 }
 .immersive-shell .build-placement {
   top: 180px;
@@ -352,6 +353,14 @@
   padding: 8px;
   border: 1px solid #9adcc3;
   border-radius: 5px;
+}
+.immersive-shell .build-placement.invalid {
+  border-color: #e18b80;
+  background: #3a1c20ee;
+}
+.immersive-shell .build-placement button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 .immersive-shell .territory-banner {
   top: 29%;
@@ -885,7 +894,7 @@
     font-size: 12px;
   }
   .immersive-shell .construction-status small {
-    display: none;
+    display: block;
   }
   .immersive-shell .build-placement {
     top: 194px;
@@ -896,7 +905,12 @@
     gap: 8px;
   }
   .immersive-shell .build-placement span {
-    display: none;
+    display: block;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .immersive-shell .build-placement > div {
+    flex: 1 1 calc(100% - 40px);
   }
   .immersive-shell .build-placement b {
     font-size: 13px;
