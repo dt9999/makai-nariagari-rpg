@@ -25,6 +25,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { createDemonPreview, createGame3D } from './game3d';
+import { NearbyIndex, PatrolClock } from './simulation';
 import { InventoryPanel } from './inventory-panel';
 import { RealmMap } from './realm-map';
 import { PreferencesPanel } from './preferences-panel';
@@ -2355,6 +2356,8 @@ export default function Home() {
     const c = canvas.current;
     if (!c) return;
     const view = createGame3D(c, REGIONS, setRenderPerformance);
+    const nearbyEnemies = new NearbyIndex<Mob>();
+    const patrolClock = new PatrolClock();
     let last = performance.now(),
       frame = 0,
       id = 0;
@@ -2647,8 +2650,8 @@ export default function Home() {
       const safeCamp = sitesIn(r.id).some(
         (site) => site.kind === 'camp' && d(w, site) < 190,
       );
+      nearbyEnemies.rebuild(w.mobs, (m) => !m.ally && !m.dead);
       w.mobs.forEach((m) => {
-        const previousMobPosition = { x: m.x, y: m.y };
         m.working = false;
         m.attackCd = Math.max(0, (m.attackCd || 0) - dt);
         m.hitAnim = Math.max(0, (m.hitAnim || 0) - dt);
@@ -2657,6 +2660,9 @@ export default function Home() {
           m.recruitTime = Math.max(0, (m.recruitTime || 0) - dt);
           return;
         }
+        const movementDt = patrolClock.step(m, w, dt);
+        if (!movementDt) return;
+        const previousMobPosition = { x: m.x, y: m.y };
         const behavior = behaviorOf(m),
           q = d(w, m) || 1,
           reach = behavior.reach * (m.boss ? 2.35 : 1),
@@ -2677,12 +2683,14 @@ export default function Home() {
               'combat',
             fieldDuty = assignment === 'combat' || assignment === 'guard';
           if (fieldDuty) {
-            target = w.mobs
-              .filter((x) => !x.ally && !x.dead)
-              .sort((a, b) => d(m, a) - d(m, b))[0];
-            const tq = target ? d(m, target) || 1 : 999,
-              dutyDetect =
-                assignment === 'guard' ? Math.min(190, detect) : detect;
+            const dutyDetect =
+              assignment === 'guard' ? Math.min(190, detect) : detect;
+            target = nearbyEnemies.nearest(
+              m,
+              dutyDetect,
+              (x) => !x.dead && !x.ally,
+            );
+            const tq = target ? d(m, target) || 1 : 999;
             if (target && tq < dutyDetect) {
               if (tq > reach && !(m.attackAnim || 0)) {
                 const allySpeed =
@@ -2784,10 +2792,10 @@ export default function Home() {
                   : 0;
             m.x +=
               (((w.x - m.x) / q) * chaseSpeed + ((w.y - m.y) / q) * strafe) *
-              dt;
+              movementDt;
             m.y +=
               (((w.y - m.y) / q) * chaseSpeed - ((w.x - m.x) / q) * strafe) *
-              dt;
+              movementDt;
           } else if (
             !safeCamp &&
             inTerritory &&
@@ -2810,8 +2818,8 @@ export default function Home() {
               tx = (m.anchorX ?? m.x) + Math.cos(angle) * patrolRadius,
               ty = (m.anchorY ?? m.y) + Math.sin(angle * 0.83) * patrolRadius,
               distance = Math.hypot(tx - m.x, ty - m.y) || 1;
-            m.x += ((tx - m.x) / distance) * behavior.wander * dt;
-            m.y += ((ty - m.y) / distance) * behavior.wander * dt;
+            m.x += ((tx - m.x) / distance) * behavior.wander * movementDt;
+            m.y += ((ty - m.y) / distance) * behavior.wander * movementDt;
             if (home) {
               m.x = Math.max(
                 home.x + 120,
@@ -2825,6 +2833,7 @@ export default function Home() {
           }
         }
         Object.assign(m, moveAroundBuildings(previousMobPosition, m, w.bases));
+        nearbyEnemies.moved(m);
         if ((m.attackAnim || 0) > 0) {
           let progress = 1 - (m.attackAnim || 0) / (m.attackTotal || 0.78);
           if (progress > 0.5 && !m.attackHit) {
