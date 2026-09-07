@@ -26,6 +26,12 @@ import {
 } from 'lucide-react';
 import { createDemonPreview, createGame3D } from './game3d';
 import { NearbyIndex, PatrolClock } from './simulation';
+import {
+  initialHoldings,
+  territoryOwner,
+  conquerTerritory,
+  territoryBossId,
+} from './territories';
 import { InventoryPanel } from './inventory-panel';
 import { RealmMap } from './realm-map';
 import { PreferencesPanel } from './preferences-panel';
@@ -942,8 +948,7 @@ const milestonesFor = (jobId: string): Milestone[] => {
     },
   ];
 };
-const ownerOf = (w: World, r: Region): Owner =>
-  w.conquered.includes(r.id) ? 'own' : r.owner;
+const ownerOf = (w: World, r: Region): Owner => territoryOwner(w, r);
 const jobOf = (w: World) => JOBS.find((j) => j.id === w.job) || JOBS[0];
 const d = (a: { x: number; y: number }, b: { x: number; y: number }) =>
   Math.hypot(a.x - b.x, a.y - b.y);
@@ -1173,6 +1178,7 @@ const baseStats = (): Stats => ({
   leadership: 1,
 });
 const fresh = (): World => ({
+  ...initialHoldings(),
   tutorial: newTutorial(),
   preferences: { ...DEFAULT_PREFERENCES },
   talkedSites: [],
@@ -1266,7 +1272,6 @@ const fresh = (): World => ({
   ore: 6,
   minions: 0,
   base: 1,
-  lands: 1,
   kills: 0,
   bossKills: 0,
   achievements: 0,
@@ -1274,9 +1279,8 @@ const fresh = (): World => ({
   nodes: resources(),
   discovered: ['ruins'],
   discoveredSites: [],
-  conquered: ['ruins'],
   message: '職業を選び、魔王への一歩を踏み出せ。',
-  banner: '自分の領土',
+  banner: '敵領土 — 隠れ家から始まる旅',
   bannerTime: 2,
   region: 'ruins',
   cd: 0,
@@ -1659,9 +1663,10 @@ export default function Home() {
     if (t.boss) {
       gain(80 + t.tier * 20);
       w.bossKills++;
-      if (!w.conquered.includes(t.home)) {
-        w.conquered.push(t.home);
-        w.lands++;
+      conquerTerritory(w, t.home);
+      if (w.region === t.home) {
+        w.banner = '領土獲得';
+        w.bannerTime = 3;
       }
       w.achievements++;
       w.message =
@@ -2116,7 +2121,7 @@ export default function Home() {
       kind: 'aberration' as MonsterKind,
     };
     w.mobs.push({
-      id: 10000 + w.bossKills,
+      id: territoryBossId(r.id),
       x: headquarters.x,
       y: headquarters.y,
       hp: 150 + required * 35,

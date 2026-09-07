@@ -136,7 +136,7 @@ export const REGIONS: Region[] = definitions.map((r, i) => ({
   y: Math.floor(i / 5) * REGION_H,
   w: REGION_W,
   h: REGION_H,
-  owner: i === 0 ? 'own' : 'enemy',
+  owner: 'enemy',
 }));
 export const regionAt = (x: number, y: number) =>
   REGIONS[
