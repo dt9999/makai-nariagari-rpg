@@ -11,6 +11,7 @@ import {
   campResidentAt,
 } from './world';
 import { createLandscape } from './landscape';
+import { createDemonArm, poseDemonArm, mountAtHandGrip } from './hands3d';
 import { acquireRealmTextures, textureSurface } from './realm-textures';
 import { createStructureModel } from './structures3d';
 import {
@@ -376,7 +377,8 @@ function buildWeapon(job: string, color: number) {
     mesh(geometry, magic, [1, 1, 1], [0, y, 0], parent);
   };
   if (job === 'mage' || job === 'nightseer') {
-    mesh(geo.cylinder, mats.wood, [0.045, 0.83, 0.045], [0, 0.1, 0], root);
+    mesh(geo.cylinder, mats.wood, [0.045, 1.17, 0.045], [0, 0.27, 0], root);
+    mesh(geo.cylinder, mats.gold, [0.065, 0.1, 0.065], [0, 0.83, 0], root);
     mesh(geo.sphere, magic, [0.17, 0.17, 0.17], [0, 1, 0], root);
     mesh(
       new THREE.TorusGeometry(0.22, 0.025, 6, 14),
@@ -386,9 +388,9 @@ function buildWeapon(job: string, color: number) {
       root,
     ).rotation.x = Math.PI / 2;
   } else if (job === 'lancer' || job === 'dragoon') {
-    mesh(geo.cylinder, mats.wood, [0.035, 1.05, 0.035], [0, 0.15, 0], root);
+    mesh(geo.cylinder, mats.wood, [0.035, 1.58, 0.035], [0, 0.415, 0], root);
     mesh(geo.cone, magic, [0.11, 0.45, 0.11], [0, 1.4, 0], root);
-    mesh(geo.cylinder, mats.gold, [0.08, 0.035, 0.08], [0, 0.94, 0], root);
+    mesh(geo.cylinder, mats.gold, [0.065, 0.09, 0.065], [0, 1.17, 0], root);
   } else if (job === 'shadow') {
     for (const side of [-1, 1]) {
       const dagger = new THREE.Group();
@@ -407,11 +409,12 @@ function buildWeapon(job: string, color: number) {
     }
   } else if (job === 'berserker' || job === 'warlock') {
     handle();
+    mesh(geo.cylinder, mats.iron, [0.045, 0.18, 0.045], [0, 0.44, 0], root);
     blade(0.18, 0.96, 0.055, 0.5);
-    mesh(geo.box, mats.iron, [0.54, 0.22, 0.1], [0, 1.55, 0], root);
+    mesh(geo.box, mats.iron, [0.54, 0.22, 0.1], [0, 1.48, 0], root);
     mesh(geo.box, mats.gold, [0.32, 0.055, 0.11], [0, 0.57, 0], root);
   } else if (job === 'ruler') {
-    mesh(geo.cylinder, mats.iron, [0.045, 0.68, 0.045], [0, 0.25, 0], root);
+    mesh(geo.cylinder, mats.iron, [0.03, 0.97, 0.03], [0, 0.395, 0], root);
     mesh(
       new THREE.TorusGeometry(0.2, 0.045, 6, 16),
       magic,
@@ -422,6 +425,7 @@ function buildWeapon(job: string, color: number) {
     mesh(geo.sphere, mats.eye, [0.08, 0.08, 0.08], [0, 1, 0], root);
   } else {
     handle();
+    mesh(geo.cylinder, mats.iron, [0.04, 0.12, 0.04], [0, 0.41, 0], root);
     blade(0.095, 0.79, 0.03, 0.45);
     mesh(geo.box, mats.gold, [0.34, 0.055, 0.08], [0, 0.42, 0], root);
   }
@@ -1155,17 +1159,15 @@ function buildFirstPersonRig(job: string, rank = 0) {
   const color = jobColors[job] || 0x5d3b79,
     rankRatio = rank / 7;
   const sleeve = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(color).lerp(
-      new THREE.Color(0x18131f),
-      0.68 + rankRatio * 0.15,
-    ),
+    color: new THREE.Color(0x26272a).lerp(new THREE.Color(0x16171b), rankRatio),
     roughness: 0.88 - rankRatio * 0.18,
     depthTest: true,
     depthWrite: true,
   });
   const skin = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(0x807282).lerp(new THREE.Color(0x4c455b), rankRatio),
-    roughness: 0.7 - rankRatio * 0.17,
+    color: new THREE.Color(0x6e625b).lerp(new THREE.Color(0x56505a), rankRatio),
+    roughness: 0.67,
+    vertexColors: true,
     depthTest: true,
     depthWrite: true,
   });
@@ -1183,170 +1185,85 @@ function buildFirstPersonRig(job: string, rank = 0) {
     depthTest: false,
     depthWrite: false,
   });
-  const makeArm = (side: number) => {
-    const arm = new THREE.Group();
+  const makeArm = (side: -1 | 1) => {
+    const arm = createDemonArm(side, rank, {
+      skin,
+      cloth: sleeve,
+      leather: mats.leather,
+      metal: mats.iron,
+      keratin: demonHard,
+      rune: runeMaterial,
+    });
     arm.position.set(side * 0.3, -0.31, -0.58);
-    const forearm = mesh(
-      new THREE.CylinderGeometry(0.06, 0.095, 0.6, 16),
-      sleeve,
-      [1, 1, 1],
-      [0, 0, -0.04],
-      arm,
-      false,
-    );
-    forearm.rotation.x = -0.78;
-    const hand = mesh(
-      new RoundedBoxGeometry(1, 1, 1, 3, 0.16),
-      skin,
-      [0.14, 0.11, 0.085],
-      [0, 0.245, -0.21],
-      arm,
-      false,
-    );
-    hand.renderOrder = 20;
-    // Four curled fingers and an opposing thumb actually enclose the grip.
-    for (let finger = 0; finger < 4; finger++) {
-      const x = (finger - 1.5) * 0.034;
-      const points = [
-        new THREE.Vector3(x, 0.285, -0.225),
-        new THREE.Vector3(x, 0.29, -0.285),
-        new THREE.Vector3(x, 0.25, -0.307),
-        new THREE.Vector3(x, 0.225, -0.278),
-      ];
-      for (let joint = 0; joint < 3; joint++) {
-        const vector = points[joint + 1].clone().sub(points[joint]);
-        const segment = mesh(
-          new THREE.CapsuleGeometry(
-            0.016 - joint * 0.0015,
-            Math.max(0.002, vector.length() - 0.022),
-            3,
-            8,
-          ),
-          skin,
-          [1, 1, 1],
-          points[joint]
-            .clone()
-            .add(points[joint + 1])
-            .multiplyScalar(0.5)
-            .toArray(),
-          arm,
-          false,
-        );
-        segment.quaternion.setFromUnitVectors(
-          new THREE.Vector3(0, 1, 0),
-          vector.normalize(),
-        );
-      }
-    }
-    const thumb = mesh(
-      new THREE.CapsuleGeometry(0.023, 0.075, 4, 10),
-      skin,
-      [1, 1, 1],
-      [-side * 0.064, 0.23, -0.25],
-      arm,
-      false,
-    );
-    thumb.rotation.set(-0.7, 0, side * 0.55);
-    for (const y of [-0.12, 0.03]) {
-      const strap = mesh(
-        new THREE.CylinderGeometry(0.096, 0.09, 0.035, 16),
-        mats.leather,
-        [1, 1, 1],
-        [0, y, -0.04 - y],
-        arm,
-        false,
-      );
-      strap.rotation.x = -0.78;
-    }
-    if (rank >= 1)
-      for (let claw = -1; claw <= 1; claw++) {
-        const talon = mesh(
-          geo.cone,
-          demonHard,
-          [0.014 + rank * 0.0015, 0.1 + rank * 0.008, 0.014 + rank * 0.0015],
-          [claw * 0.033, 0.31, -0.33],
-          arm,
-          false,
-        );
-        talon.rotation.x = Math.PI / 2.55;
-        talon.renderOrder = 21;
-      }
-    if (rank >= 2) {
-      const rune = mesh(
-        geo.box,
-        runeMaterial,
-        [0.015, 0.19 + rank * 0.012, 0.01],
-        [side * 0.054, 0.04, -0.265],
-        arm,
-        false,
-      );
-      rune.rotation.x = -0.92;
-      rune.rotation.z = side * -0.22;
-      rune.renderOrder = 22;
-    }
-    if (rank >= 3) {
-      const bracer = mesh(
-        new THREE.CylinderGeometry(0.105, 0.088, 0.28, 8, 1, true),
-        rank >= 5 ? demonHard : sleeve,
-        [1, 1, 1],
-        [0, -0.02, -0.02],
-        arm,
-        false,
-      );
-      bracer.rotation.x = -0.92;
-      bracer.renderOrder = 21;
-      if (rank >= 5) {
-        const spike = mesh(
-          geo.cone,
-          demonHard,
-          [0.035, 0.2, 0.035],
-          [side * 0.08, -0.02, -0.02],
-          arm,
-          false,
-        );
-        spike.rotation.z = side * -1.05;
-        spike.renderOrder = 22;
-      }
-    }
     root.add(arm);
     return arm;
   };
   const leftArm = makeArm(-1),
     rightArm = makeArm(1);
   const weapon = buildWeapon(job, color);
-  weapon.position.set(0.02, 0.1, -0.25);
+  const offhand = new THREE.Group();
+  if (job === 'shadow') {
+    const dagger = weapon.children[0];
+    offhand.add(dagger);
+    dagger.position.x = 0;
+    weapon.children[0].position.x = 0;
+    mountAtHandGrip(offhand, 0.02, -1);
+    leftArm.add(offhand);
+  }
+  // Grip-centred pivot keeps the handle inside the fingers during each swing.
+  mountAtHandGrip(
+    weapon,
+    job === 'shadow'
+      ? 0.02
+      : job === 'ruler'
+        ? 0.25
+        : ['mage', 'nightseer'].includes(job)
+          ? 0.1
+          : ['lancer', 'dragoon'].includes(job)
+            ? 0.15
+            : 0.18,
+  );
   weapon.rotation.set(-0.18, 0, -0.22);
-  weapon.traverse((child) => {
-    if (!(child instanceof THREE.Mesh)) return;
-    const original = child.material as THREE.MeshStandardMaterial;
-    child.material = original.clone();
-    const material = child.material as THREE.MeshStandardMaterial;
-    if (
-      original === weapon.userData.magicMaterial &&
-      !['mage', 'nightseer', 'ruler'].includes(job)
-    ) {
-      material.color.set(rank >= 4 ? 0x798ba6 : 0x8b9299);
-      material.emissiveIntensity = 0;
-      material.roughness = 0.42;
-      material.metalness = 0.84;
-    }
-    material.depthTest = true;
-    material.depthWrite = true;
-    material.metalness = Math.min(
-      1,
-      (material.metalness || 0) + rankRatio * 0.22,
-    );
-    if (rank >= 4) {
-      material.emissive = new THREE.Color(color).multiplyScalar(
-        0.16 + rankRatio * 0.12,
+  [weapon, offhand].forEach((group) =>
+    group.traverse((child) => {
+      if (!(child instanceof THREE.Mesh)) return;
+      const original = child.material as THREE.MeshStandardMaterial;
+      if (
+        child.geometry === geo.cylinder &&
+        (original === mats.leather || original === mats.wood)
+      ) {
+        child.scale.x *= 0.66;
+        child.scale.z *= 0.66;
+      }
+      child.material = original.clone();
+      const material = child.material as THREE.MeshStandardMaterial;
+      if (
+        original === weapon.userData.magicMaterial &&
+        !['mage', 'nightseer', 'ruler'].includes(job)
+      ) {
+        material.color.set(rank >= 4 ? 0x798ba6 : 0x8b9299);
+        material.emissiveIntensity = 0;
+        material.roughness = 0.42;
+        material.metalness = 0.84;
+      }
+      material.depthTest = true;
+      material.depthWrite = true;
+      material.metalness = Math.min(
+        1,
+        (material.metalness || 0) + rankRatio * 0.22,
       );
-      material.emissiveIntensity = 0.5 + rankRatio;
-    }
-    child.renderOrder = 20;
-  });
+      if (rank >= 4) {
+        material.emissive = new THREE.Color(color).multiplyScalar(
+          0.16 + rankRatio * 0.12,
+        );
+        material.emissiveIntensity = 0.5 + rankRatio;
+      }
+      child.renderOrder = 20;
+    }),
+  );
   rightArm.add(weapon);
   const hammer = makeHammer(rightArm);
-  hammer.position.set(0.02, 0.08, -0.25);
+  mountAtHandGrip(hammer, 0.18);
   hammer.rotation.set(-0.18, 0, -0.22);
   hammer.visible = false;
   const glowMaterial = new THREE.MeshBasicMaterial({
@@ -1387,6 +1304,7 @@ function buildFirstPersonRig(job: string, rank = 0) {
     weapon,
     spellGlow,
     hammer,
+    offhand,
     rankAura,
     rank,
     gait: 0,
@@ -1431,13 +1349,30 @@ function animateFirstPersonRig(
     bobY = Math.abs(Math.cos(phase * 2)) * 0.016 * locomotion * motion;
   rig.position.set(bobX, -bobY, 0);
   rig.rotation.set(0, 0, -bobX * 0.45);
-  leftArm.position.set(-0.3, -0.31, -0.58);
-  rightArm.position.set(0.3, -0.31, -0.58);
-  leftArm.rotation.set(0, 0, -0.08);
-  rightArm.rotation.set(0, 0, 0.08);
+  const breath = Math.sin(elapsed * 1.85) * 0.004 * motion;
+  leftArm.position.set(-0.27, -0.39 + breath, -0.55);
+  rightArm.position.set(0.3, -0.31 - breath * 0.6, -0.58);
+  leftArm.rotation.set(0.08, 0.3, -0.12);
+  rightArm.rotation.set(0, -0.22, 0.08);
   weapon.rotation.set(-0.18, 0, -0.22);
   const guard = data.guardBlend as number;
   const working = world.buildAnim > 0 && !world.attackAnim && !world.guarding;
+  const offhand = data.offhand as THREE.Group;
+  offhand.visible = !working;
+  poseDemonArm(rightArm, 1, dt);
+  poseDemonArm(
+    leftArm,
+    offhand.children.length && !working
+      ? 1
+      : world.attackKind === 'skill' && world.attackAnim > 0
+        ? 0.03
+        : world.guarding
+          ? 0.9
+          : working
+            ? 0.62
+            : 0.38,
+    dt,
+  );
   weapon.visible = !working;
   (data.hammer as THREE.Group).visible = working;
   rightArm.position.lerp(new THREE.Vector3(0.08, -0.18, -0.48), guard);
@@ -1502,13 +1437,15 @@ function animateFirstPersonRig(
     (1 - attackMotion) * (1 - guard),
   );
   leftArm.position.lerp(
-    new THREE.Vector3(-0.3, -0.31, -0.58),
+    new THREE.Vector3(-0.27, -0.39, -0.55),
     (1 - attackMotion) * (1 - guard),
   );
   rightArm.rotation.x *= attackMotion;
   rightArm.rotation.z *= attackMotion;
   weapon.rotation.x *= attackMotion;
   weapon.rotation.z *= attackMotion;
+  if (offhand.children.length)
+    offhand.rotation.set(weapon.rotation.x, 0, -weapon.rotation.z);
   const glow = spellGlow.material as THREE.MeshBasicMaterial;
   const passiveGlow = rank >= 2 ? Math.min(0.28, 0.025 * rank) : 0;
   glow.opacity =
@@ -3296,7 +3233,7 @@ export function createGame3D(
     lastX = world.x;
     lastY = world.y;
     animateFirstPersonRig(firstPersonRig, world, dt, elapsed, playerSpeedScene);
-    firstPersonRig.scale.setScalar(0.72 * Math.min(1, camera.aspect));
+    firstPersonRig.scale.setScalar(0.72 * Math.min(1, camera.aspect + 0.28));
     firstPersonRig.position.y -= 0.12;
     firstPersonRig.position.z = -0.45;
     const locomotion = clamp01(playerSpeedScene / 3.8),

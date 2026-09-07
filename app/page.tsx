@@ -1691,7 +1691,11 @@ export default function Home() {
           : 1),
       targets = targetsAhead(w, range),
       t = targets[0];
-    if (!t) return say(j.weapon + 'の攻撃範囲に敵がいない。');
+    w.cd = 0.38 / (j.speed * (1 + w.stats.agility * 0.025));
+    w.attackTotal = 0.62;
+    w.attackAnim = w.attackTotal;
+    w.attackKind = 'normal';
+    if (!t) return say('空振り。敵を正面と間合いに捉えよう。');
     let branchPower =
         1 + w.unlocked.filter((s) => s.endsWith('a')).length * 0.08,
       hit = Math.floor(
@@ -1734,10 +1738,6 @@ export default function Home() {
         .forEach((m) => queueHit(w, m, Math.floor(hit * 0.35), 0.32));
     if (w.job === 'shadow' && w.unlocked.includes('double'))
       queueHit(w, t, Math.floor(hit * 0.35), 0.39);
-    w.cd = 0.38 / (j.speed * (1 + w.stats.agility * 0.025));
-    w.attackTotal = 0.62;
-    w.attackAnim = w.attackTotal;
-    w.attackKind = 'normal';
     w.message = j.name + 'が構え、' + j.weapon + 'で踏み込む！';
     sync();
   };
@@ -1749,7 +1749,13 @@ export default function Home() {
     if (w.guarding) return say('防御を解いてから強攻撃しよう。');
     let j = jobOf(w),
       t = targetsAhead(w, 125 * j.range, 0.25)[0];
-    if (!t) return say('強攻撃の間合いに敵がいない。');
+    w.energy -= 28;
+    w.heavyCd = 1.1;
+    w.attackTotal = 0.96;
+    w.attackAnim = w.attackTotal;
+    w.attackKind = 'heavy';
+    if (!t)
+      return say('強攻撃が空を切った。スタミナを回復して間合いを詰めよう。');
     let hit = Math.floor(
       (20 +
         w.lv * 6 +
@@ -1764,11 +1770,6 @@ export default function Home() {
     );
     if (w.unlocked.includes('crusher') && t.boss) hit = Math.floor(hit * 1.35);
     queueHit(w, t, hit, 0.51, 35);
-    w.energy -= 28;
-    w.heavyCd = 1.1;
-    w.attackTotal = 0.96;
-    w.attackAnim = w.attackTotal;
-    w.attackKind = 'heavy';
     w.message = '重心を落とし、渾身の一撃を振りかぶる！';
     sync();
   };
@@ -1798,9 +1799,9 @@ export default function Home() {
     if (w.skillCd > 0)
       return say(`スキルはあと${Math.ceil(w.skillCd)}秒で使用可能。`);
     if (w.energy < 35) return say('スキルにはスタミナ35が必要。');
+    if (w.guarding) return say('防御を解いてからスキルを使おう。');
     let j = jobOf(w),
       targets = targetsAhead(w, 155 * j.range, 0.05).slice(0, 6);
-    if (!targets.length) return say('スキルの範囲に敵がいない。');
     let hit = Math.floor(
         (25 +
           w.lv * 5 +
