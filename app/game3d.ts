@@ -12,6 +12,12 @@ import {
 } from './world';
 import { createLandscape } from './landscape';
 import { createDemonArm, poseDemonArm, mountAtHandGrip } from './hands3d';
+import {
+  createFullBodyDemonHand,
+  demonLimbGeometry,
+  demonPelvisGeometry,
+  demonTorsoGeometry,
+} from './demon-anatomy3d';
 import { acquireRealmTextures, textureSurface } from './realm-textures';
 import { createStructureModel } from './structures3d';
 import {
@@ -809,20 +815,20 @@ function createJointLimb(
   upper.position.set(...origin);
   parent.add(upper);
   mesh(
-    geo.cylinder,
+    demonLimbGeometry(upperLength, radius),
     material,
-    [radius, upperLength, radius],
-    [0, -upperLength / 2, 0],
+    [1, 1, 1],
+    [0, 0, 0],
     upper,
   );
   const lower = new THREE.Group();
   lower.position.y = -upperLength;
   upper.add(lower);
   mesh(
-    geo.cylinder,
+    demonLimbGeometry(lowerLength, radius * 0.88, true),
     material,
-    [radius * 0.88, lowerLength, radius * 0.88],
-    [0, -lowerLength / 2, 0],
+    [1, 1, 1],
+    [0, 0, 0],
     lower,
   );
   const end = new THREE.Group();
@@ -843,7 +849,7 @@ function createJointLimb(
       end,
     );
   } else {
-    mesh(geo.sphere, mats.skin, [radius, radius, radius], [0, 0, 0], end);
+    end.add(createFullBodyDemonHand(mats.skin, mats.iron, side, radius));
   }
   return { upper, lower, end, side };
 }
@@ -899,14 +905,27 @@ function buildRiggedPlayer(
     cloth = new THREE.MeshStandardMaterial({
       color: new THREE.Color(color).lerp(
         new THREE.Color(0x17131f),
-        rankRatio * 0.38,
+        0.28 + rankRatio * 0.32,
       ),
       roughness: 0.9 - rankRatio * 0.16,
+    }),
+    hairMaterial = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(0x211b27).lerp(
+        new THREE.Color(0x09070d),
+        rankRatio * 0.72,
+      ),
+      roughness: 0.72,
+      metalness: 0.04,
+    }),
+    mouthMaterial = new THREE.MeshStandardMaterial({
+      color: 0x26131f,
+      roughness: 0.78,
     });
   const armor =
     rank < 3 || job === 'mage' || job === 'ruler' || job === 'shadow'
       ? mats.leather
       : mats.iron;
+  mesh(demonPelvisGeometry(rank), cloth, [1, 1, 1], [0, 0, 0], pelvis);
   const legs = [
     createJointLimb(pelvis, [-0.2, 0, 0], 0.52, 0.46, 0.115, cloth, -1, true),
     createJointLimb(pelvis, [0.2, 0, 0], 0.52, 0.46, 0.115, cloth, 1, true),
@@ -914,13 +933,7 @@ function buildRiggedPlayer(
   const torso = new THREE.Group();
   torso.position.y = 0.02;
   pelvis.add(torso);
-  mesh(
-    new RoundedBoxGeometry(0.76, 0.87, 0.46, 3, 0.08),
-    cloth,
-    [1, 1, 1],
-    [0, 0.43, 0],
-    torso,
-  );
+  mesh(demonTorsoGeometry(rank), cloth, [1, 1, 1], [0, 0, 0], torso);
   if (rank > 0)
     mesh(
       new RoundedBoxGeometry(0.67, 0.5, 0.12 + rank * 0.006, 2, 0.04),
@@ -929,7 +942,25 @@ function buildRiggedPlayer(
       [0, 0.49, 0.27],
       torso,
     );
-  else mesh(geo.box, mats.leather, [0.48, 0.24, 0.07], [0, 0.43, 0.25], torso);
+  else {
+    for (const side of [-1, 1]) {
+      const strap = mesh(
+        new RoundedBoxGeometry(0.09, 0.69, 0.055, 2, 0.018),
+        mats.leather,
+        [1, 1, 1],
+        [side * 0.15, 0.46, 0.235],
+        torso,
+      );
+      strap.rotation.z = side * -0.27;
+    }
+    mesh(
+      new RoundedBoxGeometry(0.5, 0.115, 0.07, 3, 0.025),
+      mats.leather,
+      [1, 1, 1],
+      [0, 0.29, 0.24],
+      torso,
+    );
+  }
   mesh(geo.box, mats.leather, [0.41, 0.07, 0.27], [0, 0.02, 0], torso);
   mesh(
     geo.cylinder,
@@ -943,6 +974,13 @@ function buildRiggedPlayer(
     createJointLimb(torso, [0.5, 0.72, 0], 0.4, 0.36, 0.105, cloth, 1),
   ];
   for (const arm of arms) {
+    mesh(
+      new THREE.SphereGeometry(1, 16, 10),
+      rank >= 3 ? armor : cloth,
+      [0.155 + rank * 0.005, 0.18, 0.16],
+      [0, -0.04, 0],
+      arm.upper,
+    );
     if (rank >= 2)
       mesh(
         geo.sphere,
@@ -970,10 +1008,65 @@ function buildRiggedPlayer(
   const head = new THREE.Group();
   head.position.y = 1.05;
   torso.add(head);
-  mesh(geo.sphere, demonSkin, [0.3, 0.34, 0.29], [0, 0, 0.02], head);
   mesh(
-    new THREE.SphereGeometry(1, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.58),
-    cloth,
+    new THREE.CylinderGeometry(0.12, 0.145, 0.23, 14),
+    demonSkin,
+    [1, 1, 1],
+    [0, -0.165, -0.01],
+    head,
+  );
+  mesh(
+    new THREE.SphereGeometry(1, 24, 16),
+    demonSkin,
+    [0.285, 0.325, 0.275],
+    [0, 0.035, 0.005],
+    head,
+  );
+  // A separate jaw, nose and facial planes prevent the head reading as a ball.
+  mesh(
+    new THREE.SphereGeometry(1, 18, 12),
+    demonSkin,
+    [0.215, 0.17, 0.23],
+    [0, -0.16, 0.055],
+    head,
+  );
+  const nose = mesh(
+    new THREE.ConeGeometry(1, 1, 8),
+    demonSkin,
+    [0.04, 0.115, 0.05],
+    [0, -0.015, 0.31],
+    head,
+  );
+  nose.rotation.x = Math.PI / 2;
+  mesh(
+    new RoundedBoxGeometry(0.115, 0.012, 0.014, 2, 0.004),
+    mouthMaterial,
+    [1, 1, 1],
+    [0, -0.145, 0.285],
+    head,
+  );
+  for (const side of [-1, 1]) {
+    const ear = mesh(
+      new THREE.ConeGeometry(1, 1, 8),
+      demonSkin,
+      [0.055, 0.16 + rank * 0.006, 0.035],
+      [side * 0.305, 0.035, 0.01],
+      head,
+    );
+    ear.rotation.z = side * -Math.PI * 0.5;
+    ear.rotation.y = side * 0.15;
+    const brow = mesh(
+      new RoundedBoxGeometry(0.105, 0.027, 0.025, 2, 0.007),
+      hornMaterial,
+      [1, 1, 1],
+      [side * 0.095, 0.095, 0.284],
+      head,
+    );
+    brow.rotation.z = side * -0.13;
+  }
+  mesh(
+    new THREE.SphereGeometry(1, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.56),
+    hairMaterial,
     [0.34, 0.28, 0.32],
     [0, 0.13, -0.01],
     head,
@@ -981,7 +1074,7 @@ function buildRiggedPlayer(
   for (let lock = -2; lock <= 2; lock++) {
     const hairLock = mesh(
       geo.cone,
-      cloth,
+      hairMaterial,
       [0.045 + (2 - Math.abs(lock)) * 0.008, 0.24 + rank * 0.012, 0.045],
       [lock * 0.09, 0.18, -0.25],
       head,
@@ -989,7 +1082,7 @@ function buildRiggedPlayer(
     hairLock.rotation.x = -0.18;
     hairLock.rotation.z = lock * 0.055;
   }
-  addEyes(head, 0.02, 0.285, 0.105, 0.045);
+  addEyes(head, 0.035, 0.285, 0.095, 0.032);
   if (rank >= 2)
     for (const side of [-1, 1])
       mesh(
