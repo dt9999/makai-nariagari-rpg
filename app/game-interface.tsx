@@ -58,7 +58,12 @@ export function GamePanel({
 }
 
 const SCREENS = [
-  { id: 'guide', title: '冒険の手引き', description: '移動から配下・建築まで、操作をひとつずつ練習。', Icon: BookOpen },
+  {
+    id: 'guide',
+    title: '冒険の手引き',
+    description: '移動から配下・建築まで、操作をひとつずつ練習。',
+    Icon: BookOpen,
+  },
   {
     id: 'inventory',
     title: '持ち物・装備',
@@ -209,6 +214,7 @@ export function AdventureHUD({
     lv: number;
     skillPoints: number;
     guarding: boolean;
+    respawnGrace: number;
   };
   jobName: string;
   rankName: string;
@@ -231,6 +237,11 @@ export function AdventureHUD({
             Lv.{world.lv} <b>{jobName}</b>
           </span>
           {inCombat && <em>戦闘中</em>}
+          {(world.respawnGrace || 0) > 0 && (
+            <em className="respawn-protection">
+              撤退保護 {Math.ceil(world.respawnGrace || 0)}秒
+            </em>
+          )}
           {world.guarding && <em>防御</em>}
         </div>
         <div className="vital-row">

@@ -97,6 +97,9 @@
   font-size: 12px;
   font-style: normal;
 }
+.identity em.respawn-protection {
+  color: #8ff0c5;
+}
 .vital-row {
   display: flex;
   align-items: center;

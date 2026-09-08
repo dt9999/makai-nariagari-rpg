@@ -167,6 +167,11 @@ export type DiscoverySite = {
   description: string;
   danger: number;
 };
+/** Camps are defended from outside their walls; other packs stay close to their habitat. */
+export function encounterPackRadius(kind: SiteKind, member: number) {
+  const index = Math.max(0, Math.floor(member));
+  return kind === 'camp' ? 620 + index * 35 : 130 + index * 35;
+}
 export const SITE_LABELS: Record<SiteKind, string> = {
   camp: '集落',
   ruin: '遺跡',

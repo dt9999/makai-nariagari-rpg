@@ -50,3 +50,48 @@ export function damageBearing(
           : '左側';
   return { degrees, direction };
 }
+
+export type RetreatingHostile = {
+  x: number;
+  y: number;
+  anchorX?: number;
+  anchorY?: number;
+  hp: number;
+  max: number;
+  ally?: boolean;
+  dead?: boolean;
+  boss?: boolean;
+  attackAnim?: number;
+  attackCd?: number;
+  attackHit?: boolean;
+  attackTarget?: number;
+  hitAnim?: number;
+};
+
+/** Clear only the encounter that defeated the player; unrelated world simulation is preserved. */
+export function retreatHostilesAfterDefeat<T extends RetreatingHostile>(
+  mobs: T[],
+  defeatedAt: { x: number; y: number },
+  radius = 900,
+) {
+  let retreated = 0;
+  const radiusSquared = radius * radius;
+  for (const mob of mobs) {
+    if (
+      mob.ally ||
+      mob.dead ||
+      (mob.x - defeatedAt.x) ** 2 + (mob.y - defeatedAt.y) ** 2 >= radiusSquared
+    )
+      continue;
+    mob.x = Number.isFinite(mob.anchorX) ? mob.anchorX! : mob.x;
+    mob.y = Number.isFinite(mob.anchorY) ? mob.anchorY! : mob.y;
+    mob.attackAnim = 0;
+    mob.attackCd = 1.5;
+    mob.attackHit = false;
+    mob.attackTarget = undefined;
+    mob.hitAnim = 0;
+    if (mob.boss) mob.hp = mob.max;
+    retreated++;
+  }
+  return retreated;
+}

@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { damageBearing, nearestRecruit } from '../app/combat-cues.ts';
+import {
+  damageBearing,
+  nearestRecruit,
+  retreatHostilesAfterDefeat,
+} from '../app/combat-cues.ts';
 
 test('recruit hints and actions select the same nearest eligible corpse within their exact range', () => {
   const player = { x: 0, y: 0 };
@@ -53,4 +57,45 @@ test('damage directions use the current camera orientation, including wrapped an
     assert.equal(damageBearing(player, source(20, 20)).direction, '正面');
     assert.equal(damageBearing(player, source(10, 30)).direction, '左側');
   }
+});
+
+test('defeat sends only the active hostile encounter home and resets boss progress', () => {
+  const nearby = {
+      x: 40,
+      y: 50,
+      anchorX: 400,
+      anchorY: 500,
+      hp: 17,
+      max: 40,
+      attackAnim: 0.4,
+      attackCd: 0,
+      attackHit: true,
+      attackTarget: 3,
+      hitAnim: 0.2,
+    },
+    boss = { ...nearby, x: 80, boss: true, hp: 5, max: 120 },
+    ally = { ...nearby, x: 20, ally: true },
+    corpse = { ...nearby, x: 30, dead: true },
+    distant = { ...nearby, x: 1200, y: 1200 };
+  assert.equal(
+    retreatHostilesAfterDefeat(
+      [nearby, boss, ally, corpse, distant],
+      { x: 0, y: 0 },
+      900,
+    ),
+    2,
+  );
+  for (const hostile of [nearby, boss]) {
+    assert.deepEqual([hostile.x, hostile.y], [400, 500]);
+    assert.equal(hostile.attackAnim, 0);
+    assert.equal(hostile.attackCd, 1.5);
+    assert.equal(hostile.attackHit, false);
+    assert.equal(hostile.attackTarget, undefined);
+    assert.equal(hostile.hitAnim, 0);
+  }
+  assert.equal(nearby.hp, 17);
+  assert.equal(boss.hp, boss.max);
+  assert.equal(ally.x, 20);
+  assert.equal(corpse.x, 30);
+  assert.equal(distant.x, 1200);
 });

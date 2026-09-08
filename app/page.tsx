@@ -33,6 +33,7 @@ import { recruitmentCohort, recruitmentChance } from './recruitment';
 import {
   damageBearing,
   nearestRecruit,
+  retreatHostilesAfterDefeat,
   type DamageSource,
 } from './combat-cues';
 import {
@@ -103,6 +104,7 @@ import {
   hazardDamage,
   hazardPhase,
   recordSiteVisit,
+  encounterPackRadius,
   type Waypoint,
 } from './world';
 
@@ -323,6 +325,7 @@ type World = {
   attackTotal: number;
   attackKind: 'none' | 'normal' | 'heavy' | 'skill';
   hitAnim: number;
+  respawnGrace: number;
   damageSource?: DamageSource;
   buildAnim: number;
   buildMode: boolean;
@@ -1126,7 +1129,7 @@ const spawn = (): Mob[] =>
         member = i % 4,
         site = sitesIn(region.id)[packIndex],
         packAngle = member * 2.35 + packIndex * 0.4,
-        packRadius = site.kind === 'camp' ? 300 : 130 + member * 35,
+        packRadius = encounterPackRadius(site.kind, member),
         hp = (30 + tier * 22) * (i === 31 ? 2.2 : 1),
         x = site.x + Math.cos(packAngle) * packRadius,
         y = site.y + Math.sin(packAngle) * packRadius;
@@ -1238,6 +1241,7 @@ const fresh = (): World => ({
   attackTotal: 0.62,
   attackKind: 'none',
   hitAnim: 0,
+  respawnGrace: 0,
   buildAnim: 0,
   buildMode: false,
   buildYaw: 0,
@@ -2462,8 +2466,9 @@ export default function Home() {
         ),
       );
       recordTutorialMotion(w.tutorial, d(w, previousPosition), 0);
+      w.respawnGrace = Math.max(0, (w.respawnGrace || 0) - dt);
       const environmentHarm = hazardDamage(w.x, w.y, w.height, w.worldTime, dt);
-      if (environmentHarm > 0) {
+      if (environmentHarm > 0 && w.respawnGrace <= 0) {
         w.hp -= environmentHarm;
         w.hitAnim = 0.15;
         w.damageSource = undefined;
@@ -2674,9 +2679,9 @@ export default function Home() {
           w.maxHp,
           w.hp + Math.max(1, Math.floor(w.stats.stamina * 0.45)),
         );
-      const safeCamp = sitesIn(r.id).some(
-        (site) => site.kind === 'camp' && d(w, site) < 190,
-      );
+      const safeCamp =
+        w.respawnGrace > 0 ||
+        sitesIn(r.id).some((site) => site.kind === 'camp' && d(w, site) < 190);
       nearbyEnemies.rebuild(w.mobs, (m) => !m.ally && !m.dead);
       w.mobs.forEach((m) => {
         m.working = false;
@@ -2907,6 +2912,7 @@ export default function Home() {
               }
             } else if (
               !safeCamp &&
+              w.respawnGrace <= 0 &&
               d(w, m) < reach + 28 &&
               w.dodgeTime <= 0 &&
               clearBuildingSight(m, w, w.bases, 0.9, w.height + 0.9)
@@ -2948,6 +2954,7 @@ export default function Home() {
           w.unlocked = w.unlocked.filter((s) => s !== 'undying');
           w.message = '不死の執念で致命傷に耐えた！';
         } else {
+          const defeatedAt = { x: w.x, y: w.y };
           const refuge = [...w.bases]
             .reverse()
             .find(
@@ -2970,8 +2977,16 @@ export default function Home() {
           w.velocityY = 0;
           w.grounded = true;
           w.hp = w.maxHp;
+          w.energy = w.maxEnergy;
+          w.guarding = false;
+          w.dodgeTime = 0;
+          w.attackAnim = 0;
+          w.attackKind = 'none';
+          w.pendingHits = [];
+          w.respawnGrace = 5;
           w.damageSource = undefined;
-          w.message = `敗北。${refuge?.name || '忘れられた廃墟'}へ撤退した。`;
+          const retreated = retreatHostilesAfterDefeat(w.mobs, defeatedAt);
+          w.message = `敗北。${refuge?.name || '忘れられた廃墟'}へ撤退した。5秒間は攻撃を受けない。${retreated ? `追跡していた敵${retreated}体は縄張りへ戻った。` : ''}`;
         }
       }
       view.render(w, dt);
@@ -3026,9 +3041,11 @@ export default function Home() {
     currentHazard = hazardAt(hud.x, hud.y),
     currentOwner = ownerOf(hud, current),
     inCombat =
+      (hud.respawnGrace || 0) <= 0 &&
       !sitesIn(current.id).some(
         (site) => site.kind === 'camp' && d(hud, site) < 190,
-      ) && hud.mobs.some((mob) => !mob.dead && !mob.ally && d(hud, mob) < 240),
+      ) &&
+      hud.mobs.some((mob) => !mob.dead && !mob.ally && d(hud, mob) < 240),
     need = hud.lv * 34,
     ready = canRank(hud),
     currentJob = JOBS.find((j) => j.id === hud.job),
