@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { createDemonPreview, createGame3D } from './game3d';
 import { NearbyIndex, PatrolClock } from './simulation';
+import { damageBearing, type DamageSource } from './combat-cues';
 import {
   initialHoldings,
   territoryOwner,
@@ -47,6 +48,7 @@ import {
   plannedBuilding,
   placementIssue,
   constructionApproach,
+  constructionPoint,
   constructionWork,
   clearBuildingSight,
   type StructureKind,
@@ -322,6 +324,7 @@ type World = {
   attackTotal: number;
   attackKind: 'none' | 'normal' | 'heavy' | 'skill';
   hitAnim: number;
+  damageSource?: DamageSource;
   buildAnim: number;
   buildMode: boolean;
   buildYaw: number;
@@ -2449,6 +2452,7 @@ export default function Home() {
       if (environmentHarm > 0) {
         w.hp -= environmentHarm;
         w.hitAnim = 0.15;
+        w.damageSource = undefined;
       }
       if (sprinting) w.energy = Math.max(0, w.energy - 17 * dt);
       if (!w.grounded) {
@@ -2468,6 +2472,10 @@ export default function Home() {
       w.attackAnim = Math.max(0, w.attackAnim - dt);
       if (w.attackAnim <= 0) w.attackKind = 'none';
       w.hitAnim = Math.max(0, w.hitAnim - dt);
+      if (w.damageSource) {
+        w.damageSource.remaining -= dt;
+        if (w.damageSource.remaining <= 0) w.damageSource = undefined;
+      }
       const incompleteSites = w.bases.filter((site) => !site.complete);
       const builders = new globalThis.Map(
         w.roster
@@ -2904,6 +2912,7 @@ export default function Home() {
               }
               w.hp -= harm;
               w.hitAnim = 0.34;
+              w.damageSource = { x: m.x, y: m.y, name: m.name, remaining: 1.8 };
             }
           }
           m.attackAnim = Math.max(0, (m.attackAnim || 0) - dt);
@@ -2930,11 +2939,20 @@ export default function Home() {
                   site.kind,
                 ),
             );
-          w.x = refuge?.x || 900;
-          w.y = refuge?.y || 1250;
-          w.viewYaw = 0;
+          const returnPoint = refuge
+            ? constructionPoint(refuge, 2)
+            : { x: 1024, y: 1180 };
+          w.x = returnPoint.x;
+          w.y = returnPoint.y;
+          w.viewYaw = refuge
+            ? Math.atan2(returnPoint.x - refuge.x, returnPoint.y - refuge.y)
+            : 0;
           w.viewPitch = 0;
+          w.height = 0;
+          w.velocityY = 0;
+          w.grounded = true;
           w.hp = w.maxHp;
+          w.damageSource = undefined;
           w.message = `敗北。${refuge?.name || '忘れられた廃墟'}へ撤退した。`;
         }
       }
@@ -3038,6 +3056,20 @@ export default function Home() {
             onInventory={() => openScreen('inventory')}
             onRank={() => openScreen('rank')}
           />
+        )}
+        {hud.job && hud.damageSource && (
+          <div className="damage-direction" role="status">
+            <span
+              aria-hidden="true"
+              style={{
+                transform: `rotate(${damageBearing(hud, hud.damageSource).degrees}deg)`,
+              }}
+            >
+              ▲
+            </span>
+            <b>{damageBearing(hud, hud.damageSource).direction}から被弾</b>
+            <small>{hud.damageSource.name}</small>
+          </div>
         )}
         {adventureOpen && (
           <AdventureMenu

@@ -1060,6 +1060,38 @@
     top: 41%;
   }
 }
+
+.damage-direction {
+  position: absolute;
+  z-index: 12;
+  pointer-events: none;
+  top: calc(50% - 98px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(220px, calc(100% - 32px));
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 2px 8px;
+  padding: 8px 12px;
+  border: 1px solid #e89483;
+  border-radius: 8px;
+  background: #291316ed;
+  color: #fff0e9;
+  font-size: 14px;
+}
+.damage-direction > span {
+  grid-row: span 2;
+  align-self: center;
+  text-align: center;
+  color: #ffac91;
+  font-size: 23px;
+}
+.damage-direction small {
+  font-size: 12px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
 @media (prefers-reduced-motion: reduce) {
   .game-panel,
   .immersive-shell .territory-banner,
