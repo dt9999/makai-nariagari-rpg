@@ -13,7 +13,8 @@ import {
 import { createLandscape } from './landscape';
 import { createDemonArm, poseDemonArm, mountAtHandGrip } from './hands3d';
 import {
-  createFullBodyDemonHand,
+  createCreatureLimbEnd,
+  type CreatureLimbEnd,
   demonLimbGeometry,
   demonPelvisGeometry,
   demonTorsoGeometry,
@@ -286,6 +287,11 @@ function releaseModel(root: THREE.Object3D) {
   });
   geometries.forEach((g) => g.dispose());
   materials.forEach((m) => m.dispose());
+}
+
+function keepSharedAnatomy<T extends THREE.BufferGeometry>(geometry: T): T {
+  sharedGeometry.add(geometry);
+  return geometry;
 }
 
 function mesh(
@@ -809,13 +815,15 @@ function createJointLimb(
   radius: number,
   material: THREE.Material,
   side: number,
-  foot = false,
+  endStyle: CreatureLimbEnd = 'hand',
+  endMaterial: THREE.Material = mats.skin,
+  endAccent: THREE.Material = mats.iron,
 ): JointLimb {
   const upper = new THREE.Group();
   upper.position.set(...origin);
   parent.add(upper);
   mesh(
-    demonLimbGeometry(upperLength, radius),
+    keepSharedAnatomy(demonLimbGeometry(upperLength, radius)),
     material,
     [1, 1, 1],
     [0, 0, 0],
@@ -825,7 +833,7 @@ function createJointLimb(
   lower.position.y = -upperLength;
   upper.add(lower);
   mesh(
-    demonLimbGeometry(lowerLength, radius * 0.88, true),
+    keepSharedAnatomy(demonLimbGeometry(lowerLength, radius * 0.88, true)),
     material,
     [1, 1, 1],
     [0, 0, 0],
@@ -834,23 +842,17 @@ function createJointLimb(
   const end = new THREE.Group();
   end.position.y = -lowerLength;
   lower.add(end);
-  if (foot) {
-    mesh(
-      new RoundedBoxGeometry(
-        radius * 2.25,
-        radius * 1.25,
-        radius * 3.1,
-        2,
-        0.035,
-      ),
-      mats.leather,
-      [1, 1, 1],
-      [0, -radius * 0.2, radius * 0.55],
-      end,
-    );
-  } else {
-    end.add(createFullBodyDemonHand(mats.skin, mats.iron, side, radius));
-  }
+  const limbEnd = createCreatureLimbEnd(
+    endStyle,
+    endMaterial,
+    endAccent,
+    side,
+    radius,
+  );
+  limbEnd.traverse((part) => {
+    if (part instanceof THREE.Mesh) sharedGeometry.add(part.geometry);
+  });
+  end.add(limbEnd);
   return { upper, lower, end, side };
 }
 
@@ -925,15 +927,49 @@ function buildRiggedPlayer(
     rank < 3 || job === 'mage' || job === 'ruler' || job === 'shadow'
       ? mats.leather
       : mats.iron;
-  mesh(demonPelvisGeometry(rank), cloth, [1, 1, 1], [0, 0, 0], pelvis);
+  mesh(
+    keepSharedAnatomy(demonPelvisGeometry(rank)),
+    cloth,
+    [1, 1, 1],
+    [0, 0, 0],
+    pelvis,
+  );
   const legs = [
-    createJointLimb(pelvis, [-0.2, 0, 0], 0.52, 0.46, 0.115, cloth, -1, true),
-    createJointLimb(pelvis, [0.2, 0, 0], 0.52, 0.46, 0.115, cloth, 1, true),
+    createJointLimb(
+      pelvis,
+      [-0.2, 0, 0],
+      0.52,
+      0.46,
+      0.115,
+      cloth,
+      -1,
+      'boot',
+      mats.skin,
+      mats.leather,
+    ),
+    createJointLimb(
+      pelvis,
+      [0.2, 0, 0],
+      0.52,
+      0.46,
+      0.115,
+      cloth,
+      1,
+      'boot',
+      mats.skin,
+      mats.leather,
+    ),
   ];
   const torso = new THREE.Group();
   torso.position.y = 0.02;
   pelvis.add(torso);
-  mesh(demonTorsoGeometry(rank), cloth, [1, 1, 1], [0, 0, 0], torso);
+  mesh(
+    keepSharedAnatomy(demonTorsoGeometry(rank)),
+    cloth,
+    [1, 1, 1],
+    [0, 0, 0],
+    torso,
+  );
   if (rank > 0)
     mesh(
       new RoundedBoxGeometry(0.67, 0.5, 0.12 + rank * 0.006, 2, 0.04),
@@ -1737,9 +1773,11 @@ function buildRiggedMob(mob: RenderMob) {
           0.34,
           0.28,
           0.085,
-          mats.leather,
+          baseMat,
           side,
-          true,
+          'paw',
+          baseMat,
+          accentMat,
         );
         legs.push(limb);
       }
@@ -1788,7 +1826,9 @@ function buildRiggedMob(mob: RenderMob) {
           0.045,
           accentMat,
           side,
-          true,
+          'claw',
+          accentMat,
+          variant === 4 ? glowMat : mats.iron,
         );
         leg.upper.rotation.z = side * (0.86 + i * 0.1);
         leg.lower.rotation.z = side * -0.52;
@@ -1829,7 +1869,9 @@ function buildRiggedMob(mob: RenderMob) {
         0.19,
         baseMat,
         side,
-        true,
+        'stone',
+        baseMat,
+        accentMat,
       ),
     );
     torso = new THREE.Group();
@@ -1845,6 +1887,9 @@ function buildRiggedMob(mob: RenderMob) {
         0.22,
         accentMat,
         side,
+        'stone',
+        accentMat,
+        baseMat,
       ),
     );
     head = new THREE.Group();
@@ -1941,6 +1986,9 @@ function buildRiggedMob(mob: RenderMob) {
         0.075,
         mats.wood,
         side,
+        'root',
+        mats.wood,
+        variant === 4 ? glowMat : baseMat,
       ),
     );
     for (let i = 0; i < 4 + (variant % 3); i++) {
@@ -2044,7 +2092,9 @@ function buildRiggedMob(mob: RenderMob) {
         large ? 0.15 : 0.11,
         baseMat,
         -1,
-        true,
+        'boot',
+        baseMat,
+        large ? accentMat : mats.leather,
       ),
       createJointLimb(
         pelvis,
@@ -2054,7 +2104,9 @@ function buildRiggedMob(mob: RenderMob) {
         large ? 0.15 : 0.11,
         baseMat,
         1,
-        true,
+        'boot',
+        baseMat,
+        large ? accentMat : mats.leather,
       ),
     ];
     torso = new THREE.Group();
@@ -2090,6 +2142,9 @@ function buildRiggedMob(mob: RenderMob) {
         large ? 0.13 : 0.095,
         baseMat,
         -1,
+        'hand',
+        baseMat,
+        large ? accentMat : mats.iron,
       ),
       createJointLimb(
         torso,
@@ -2099,6 +2154,9 @@ function buildRiggedMob(mob: RenderMob) {
         large ? 0.13 : 0.095,
         baseMat,
         1,
+        'hand',
+        baseMat,
+        large ? accentMat : mats.iron,
       ),
     ];
     if (large)
