@@ -90,6 +90,37 @@ export function demonLimbGeometry(
   );
 }
 
+export function demonShoulderGeometry(radius: number, rank: number) {
+  const development = THREE.MathUtils.clamp(rank, 0, 7) * 0.012;
+  return cachedGeometry(`shoulder:${radius.toFixed(4)}:${rank}`, () =>
+    anatomicalLoft(
+      [
+        {
+          at: [0, radius * 0.25, 0],
+          width: radius * (1.18 + development),
+          depth: radius * 1.02,
+        },
+        {
+          at: [0, -radius * 0.18, radius * 0.02],
+          width: radius * (1.48 + development),
+          depth: radius * (1.28 + development * 0.4),
+        },
+        {
+          at: [0, -radius * 0.82, 0],
+          width: radius * 1.22,
+          depth: radius * 1.08,
+        },
+        {
+          at: [0, -radius * 1.35, 0],
+          width: radius * 0.92,
+          depth: radius * 0.86,
+        },
+      ],
+      14,
+    ),
+  );
+}
+
 export function createFullBodyDemonHand(
   skin: THREE.Material,
   keratin: THREE.Material,
@@ -100,59 +131,164 @@ export function createFullBodyDemonHand(
   root.name = side > 0 ? '右手・五指' : '左手・五指';
   const radiusKey = radius.toFixed(4),
     palm = new THREE.Mesh(
-      cachedGeometry(
-        `hand-palm:${radiusKey}`,
-        () =>
-          new RoundedBoxGeometry(
-            radius * 1.42,
-            radius * 1.18,
-            radius * 0.84,
-            3,
-            radius * 0.19,
-          ),
+      cachedGeometry(`hand-palm:${radiusKey}`, () =>
+        anatomicalLoft(
+          [
+            {
+              at: [0, 0, 0],
+              width: radius * 0.45,
+              depth: radius * 0.31,
+            },
+            {
+              at: [0, -radius * 0.28, radius * 0.015],
+              width: radius * 0.62,
+              depth: radius * 0.39,
+            },
+            {
+              at: [0, -radius * 0.72, radius * 0.025],
+              width: radius * 0.72,
+              depth: radius * 0.42,
+            },
+            {
+              at: [0, -radius * 1.16, 0],
+              width: radius * 0.63,
+              depth: radius * 0.35,
+            },
+          ],
+          14,
+        ),
       ),
       skin,
     );
   palm.name = '掌';
-  palm.position.set(0, -radius * 0.54, 0.012);
+  palm.userData.anatomy = '手根・母指球を含む連続曲面';
   root.add(palm);
   for (let finger = 0; finger < 4; finger++) {
     const scale = [0.9, 1.04, 0.98, 0.78][finger],
-      x = side * (-0.38 + finger * 0.255) * radius,
-      length = radius * (0.82 + scale * 0.36),
+      x = side * (-0.49 + finger * 0.33) * radius,
+      length = radius * (0.76 + scale * 0.42),
       digit = new THREE.Mesh(
-        cachedGeometry(
-          `hand-finger:${radiusKey}:${finger}`,
-          () => new THREE.CapsuleGeometry(radius * 0.115, length, 3, 7),
+        cachedGeometry(`hand-finger:${radiusKey}:${finger}`, () =>
+          anatomicalLoft(
+            [
+              {
+                at: [0, 0, 0],
+                width: radius * 0.14,
+                depth: radius * 0.12,
+              },
+              {
+                at: [0, -length * 0.31, radius * 0.025],
+                width: radius * 0.15,
+                depth: radius * 0.128,
+              },
+              {
+                at: [0, -length * 0.64, radius * 0.045],
+                width: radius * 0.126,
+                depth: radius * 0.112,
+              },
+              {
+                at: [0, -length, radius * 0.02],
+                width: radius * 0.075,
+                depth: radius * 0.068,
+              },
+            ],
+            10,
+          ),
         ),
         skin,
       );
     digit.name = ['人差し指', '中指', '薬指', '小指'][finger];
-    digit.position.set(x, -radius * 1.22 - length * 0.35, 0.015);
+    digit.position.set(x, -radius * 1.08, 0.005);
     digit.rotation.z = side * (finger - 1.5) * 0.025;
     root.add(digit);
     const nail = new THREE.Mesh(
-      cachedGeometry(
-        `hand-nail:${radiusKey}`,
-        () => new THREE.SphereGeometry(radius * 0.105, 7, 5),
+      cachedGeometry(`hand-nail:${radiusKey}:${finger}`, () =>
+        anatomicalLoft(
+          [
+            {
+              at: [0, 0, 0],
+              width: radius * 0.098,
+              depth: radius * 0.021,
+            },
+            {
+              at: [0, -length * 0.17, 0],
+              width: radius * 0.09,
+              depth: radius * 0.018,
+            },
+            {
+              at: [0, -length * 0.29, 0],
+              width: radius * 0.018,
+              depth: radius * 0.008,
+            },
+          ],
+          8,
+        ),
       ),
       keratin,
     );
     nail.name = `${digit.name}の爪`;
-    nail.scale.set(0.72, 0.9, 0.24);
-    nail.position.set(x, digit.position.y - length * 0.48, radius * 0.105);
+    nail.position.set(x, digit.position.y - length * 0.69, radius * 0.125);
+    nail.rotation.z = digit.rotation.z;
     root.add(nail);
   }
-  const thumbLength = radius * 0.7,
-    thumb = new THREE.Mesh(
-      cachedGeometry(
-        `hand-thumb:${radiusKey}`,
-        () => new THREE.CapsuleGeometry(radius * 0.14, thumbLength, 3, 7),
+  const thumbLength = radius * 0.82,
+    thumb = new THREE.Group(),
+    thumbDigit = new THREE.Mesh(
+      cachedGeometry(`hand-thumb:${radiusKey}`, () =>
+        anatomicalLoft(
+          [
+            {
+              at: [0, 0, 0],
+              width: radius * 0.18,
+              depth: radius * 0.15,
+            },
+            {
+              at: [0, -thumbLength * 0.45, radius * 0.018],
+              width: radius * 0.16,
+              depth: radius * 0.14,
+            },
+            {
+              at: [0, -thumbLength, 0],
+              width: radius * 0.09,
+              depth: radius * 0.075,
+            },
+          ],
+          10,
+        ),
       ),
       skin,
+    ),
+    thumbNail = new THREE.Mesh(
+      cachedGeometry(`hand-thumb-nail:${radiusKey}`, () =>
+        anatomicalLoft(
+          [
+            {
+              at: [0, 0, 0],
+              width: radius * 0.105,
+              depth: radius * 0.022,
+            },
+            {
+              at: [0, -thumbLength * 0.2, 0],
+              width: radius * 0.082,
+              depth: radius * 0.016,
+            },
+            {
+              at: [0, -thumbLength * 0.31, 0],
+              width: radius * 0.018,
+              depth: radius * 0.008,
+            },
+          ],
+          8,
+        ),
+      ),
+      keratin,
     );
   thumb.name = '対向する親指';
-  thumb.position.set(side * radius * 0.72, -radius * 0.62, 0.035);
+  thumbDigit.name = '親指の二関節';
+  thumbNail.name = '親指の爪';
+  thumbNail.position.set(0, -thumbLength * 0.55, radius * 0.15);
+  thumb.add(thumbDigit, thumbNail);
+  thumb.position.set(side * radius * 0.62, -radius * 0.38, 0.025);
   thumb.rotation.z = side * -0.72;
   thumb.rotation.x = -0.24;
   root.add(thumb);

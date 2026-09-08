@@ -17,6 +17,7 @@ import {
   type CreatureLimbEnd,
   demonLimbGeometry,
   demonPelvisGeometry,
+  demonShoulderGeometry,
   demonTorsoGeometry,
 } from './demon-anatomy3d';
 import { acquireRealmTextures, textureSurface } from './realm-textures';
@@ -1007,10 +1008,10 @@ function buildRiggedPlayer(
   ];
   for (const arm of arms) {
     mesh(
-      new THREE.SphereGeometry(1, 16, 10),
+      keepSharedAnatomy(demonShoulderGeometry(0.105, rank)),
       rank >= 3 ? armor : cloth,
-      [0.155 + rank * 0.005, 0.18, 0.16],
-      [0, -0.04, 0],
+      [1, 1, 1],
+      [0, 0, 0],
       arm.upper,
     );
     if (rank >= 2)

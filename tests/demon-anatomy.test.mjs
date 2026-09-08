@@ -6,6 +6,7 @@ import {
   createFullBodyDemonHand,
   demonLimbGeometry,
   demonPelvisGeometry,
+  demonShoulderGeometry,
   demonTorsoGeometry,
 } from '../app/demon-anatomy3d.ts';
 
@@ -18,15 +19,26 @@ test('full-body anatomy has tapered three-dimensional torso, pelvis and limbs', 
   const torso = demonTorsoGeometry(0),
     sovereignTorso = demonTorsoGeometry(7),
     pelvis = demonPelvisGeometry(0),
+    shoulder = demonShoulderGeometry(0.105, 0),
     upper = demonLimbGeometry(0.52, 0.115),
     lower = demonLimbGeometry(0.46, 0.1, true);
-  for (const geometry of [torso, sovereignTorso, pelvis, upper, lower]) {
+  for (const geometry of [
+    torso,
+    sovereignTorso,
+    pelvis,
+    shoulder,
+    upper,
+    lower,
+  ]) {
     const size = sizeOf(geometry);
     assert.ok(size.x > 0 && size.y > 0 && size.z > 0);
     assert.ok(geometry.getAttribute('normal').count > 0);
   }
   assert.ok(sizeOf(sovereignTorso).x > sizeOf(torso).x);
   assert.ok(sizeOf(upper).y > sizeOf(lower).y);
+  const shoulderSize = sizeOf(shoulder);
+  assert.ok(shoulderSize.y < shoulderSize.z * 0.8);
+  assert.strictEqual(demonShoulderGeometry(0.105, 0), shoulder);
 });
 
 test('creature families have silhouette-specific feet, claws, fists and roots', () => {
@@ -95,8 +107,22 @@ test('full-body hands use a palm, four distinct fingers, thumb and nails', () =>
       assert.ok(names.includes(finger));
       assert.ok(names.includes(`${finger}の爪`));
     }
+    assert.ok(names.includes('親指の二関節'));
+    assert.ok(names.includes('親指の爪'));
     const box = new THREE.Box3().setFromObject(hand),
       size = box.getSize(new THREE.Vector3());
     assert.ok(size.x > 0.1 && size.y > 0.1 && size.z > 0.03);
+
+    const indexFinger = hand.getObjectByName('人差し指'),
+      nailPlate = hand.getObjectByName('人差し指の爪'),
+      palm = hand.getObjectByName('掌');
+    assert.equal(indexFinger.geometry.type, 'BufferGeometry');
+    assert.equal(nailPlate.geometry.type, 'BufferGeometry');
+    assert.equal(palm.userData.anatomy, '手根・母指球を含む連続曲面');
+    const nailSize = sizeOf(nailPlate.geometry);
+    assert.ok(
+      nailSize.z < nailSize.x * 0.35,
+      'nails are thin plates, not balls',
+    );
   }
 });
