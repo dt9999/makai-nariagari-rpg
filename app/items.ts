@@ -32,6 +32,14 @@ export type Equipment = {
   gem: string | null;
   relic: string | null;
 };
+export type WeaponAppearance =
+  | 'bare'
+  | 'sword'
+  | 'axe'
+  | 'staff'
+  | 'dagger'
+  | 'spear'
+  | 'sigil';
 export type WorldLoot = {
   id: number;
   x: number;
@@ -221,6 +229,17 @@ export const emptyEquipment = (): Equipment => ({
   gem: null,
   relic: null,
 });
+export function weaponAppearance(
+  weaponId: string | null | undefined,
+): WeaponAppearance {
+  if (!weaponId) return 'bare';
+  const item = byId.get(weaponId);
+  if (!item || item.kind !== 'weapon') return 'bare';
+  const family = weaponId.split('-')[0];
+  return ['sword', 'axe', 'staff', 'dagger', 'spear', 'sigil'].includes(family)
+    ? (family as WeaponAppearance)
+    : 'bare';
+}
 export function addInventory(
   inventory: InventoryStack[],
   id: string,

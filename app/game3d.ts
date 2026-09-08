@@ -21,7 +21,12 @@ import {
 } from './structures';
 import { createLootRenderer } from './loot3d';
 import { createHazardRenderer } from './hazards3d';
-import type { WorldLoot } from './items';
+import {
+  weaponAppearance,
+  type Equipment,
+  type WeaponAppearance,
+  type WorldLoot,
+} from './items';
 import {
   DEFAULT_PREFERENCES,
   qualityProfile,
@@ -105,6 +110,7 @@ export type RenderWorld = {
   hp: number;
   maxHp: number;
   job: string;
+  equipment?: Pick<Equipment, 'weapon'>;
   rank: number;
   guarding: boolean;
   dodgeTime: number;
@@ -332,7 +338,23 @@ function addEyes(
   );
 }
 
-function buildWeapon(job: string, color: number) {
+function defaultWeaponAppearance(job: string): WeaponAppearance {
+  if (job === 'mage' || job === 'nightseer') return 'staff';
+  if (job === 'lancer' || job === 'dragoon') return 'spear';
+  if (job === 'shadow') return 'dagger';
+  if (job === 'berserker' || job === 'warlock') return 'axe';
+  if (job === 'ruler') return 'sigil';
+  return job ? 'sword' : 'bare';
+}
+
+function buildWeapon(source: string, color: number) {
+  const kind = (
+    ['bare', 'sword', 'axe', 'staff', 'dagger', 'spear', 'sigil'].includes(
+      source,
+    )
+      ? source
+      : defaultWeaponAppearance(source)
+  ) as WeaponAppearance;
   const root = new THREE.Group(),
     magic = new THREE.MeshStandardMaterial({
       color,
@@ -376,7 +398,11 @@ function buildWeapon(job: string, color: number) {
     geometry.translate(0, 0, -thickness * 0.5);
     mesh(geometry, magic, [1, 1, 1], [0, y, 0], parent);
   };
-  if (job === 'mage' || job === 'nightseer') {
+  if (kind === 'bare') {
+    root.userData.magicMaterial = magic;
+    return root;
+  }
+  if (kind === 'staff') {
     mesh(geo.cylinder, mats.wood, [0.045, 1.17, 0.045], [0, 0.27, 0], root);
     mesh(geo.cylinder, mats.gold, [0.065, 0.1, 0.065], [0, 0.83, 0], root);
     mesh(geo.sphere, magic, [0.17, 0.17, 0.17], [0, 1, 0], root);
@@ -387,11 +413,11 @@ function buildWeapon(job: string, color: number) {
       [0, 1, 0],
       root,
     ).rotation.x = Math.PI / 2;
-  } else if (job === 'lancer' || job === 'dragoon') {
+  } else if (kind === 'spear') {
     mesh(geo.cylinder, mats.wood, [0.035, 1.58, 0.035], [0, 0.415, 0], root);
     mesh(geo.cone, magic, [0.11, 0.45, 0.11], [0, 1.4, 0], root);
     mesh(geo.cylinder, mats.gold, [0.065, 0.09, 0.065], [0, 1.17, 0], root);
-  } else if (job === 'shadow') {
+  } else if (kind === 'dagger') {
     for (const side of [-1, 1]) {
       const dagger = new THREE.Group();
       dagger.position.x = side * 0.12;
@@ -407,13 +433,13 @@ function buildWeapon(job: string, color: number) {
       dagger.rotation.z = side * 0.12;
       root.add(dagger);
     }
-  } else if (job === 'berserker' || job === 'warlock') {
+  } else if (kind === 'axe') {
     handle();
     mesh(geo.cylinder, mats.iron, [0.045, 0.18, 0.045], [0, 0.44, 0], root);
     blade(0.18, 0.96, 0.055, 0.5);
     mesh(geo.box, mats.iron, [0.54, 0.22, 0.1], [0, 1.48, 0], root);
     mesh(geo.box, mats.gold, [0.32, 0.055, 0.11], [0, 0.57, 0], root);
-  } else if (job === 'ruler') {
+  } else if (kind === 'sigil') {
     mesh(geo.cylinder, mats.iron, [0.03, 0.97, 0.03], [0, 0.395, 0], root);
     mesh(
       new THREE.TorusGeometry(0.2, 0.045, 6, 16),
@@ -1143,7 +1169,11 @@ function buildRiggedPlayer(job: string, rank = 0) {
   return root;
 }
 
-function buildFirstPersonRig(job: string, rank = 0) {
+function buildFirstPersonRig(
+  job: string,
+  rank = 0,
+  equippedWeapon?: string | null,
+) {
   const root = new THREE.Group();
   const jobColors: Record<string, number> = {
     blade: 0x8454c4,
@@ -1200,9 +1230,11 @@ function buildFirstPersonRig(job: string, rank = 0) {
   };
   const leftArm = makeArm(-1),
     rightArm = makeArm(1);
-  const weapon = buildWeapon(job, color);
+  const weaponKind = weaponAppearance(equippedWeapon),
+    armed = weaponKind !== 'bare',
+    weapon = buildWeapon(weaponKind, color);
   const offhand = new THREE.Group();
-  if (job === 'shadow') {
+  if (weaponKind === 'dagger') {
     const dagger = weapon.children[0];
     offhand.add(dagger);
     dagger.position.x = 0;
@@ -1213,13 +1245,13 @@ function buildFirstPersonRig(job: string, rank = 0) {
   // Grip-centred pivot keeps the handle inside the fingers during each swing.
   mountAtHandGrip(
     weapon,
-    job === 'shadow'
+    weaponKind === 'dagger'
       ? 0.02
-      : job === 'ruler'
+      : weaponKind === 'sigil'
         ? 0.25
-        : ['mage', 'nightseer'].includes(job)
+        : weaponKind === 'staff'
           ? 0.1
-          : ['lancer', 'dragoon'].includes(job)
+          : weaponKind === 'spear'
             ? 0.15
             : 0.18,
   );
@@ -1239,7 +1271,7 @@ function buildFirstPersonRig(job: string, rank = 0) {
       const material = child.material as THREE.MeshStandardMaterial;
       if (
         original === weapon.userData.magicMaterial &&
-        !['mage', 'nightseer', 'ruler'].includes(job)
+        !['staff', 'sigil'].includes(weaponKind)
       ) {
         material.color.set(rank >= 4 ? 0x798ba6 : 0x8b9299);
         material.emissiveIntensity = 0;
@@ -1306,6 +1338,7 @@ function buildFirstPersonRig(job: string, rank = 0) {
     hammer,
     offhand,
     rankAura,
+    armed,
     rank,
     gait: 0,
     speedBlend: 0,
@@ -1357,9 +1390,21 @@ function animateFirstPersonRig(
   weapon.rotation.set(-0.18, 0, -0.22);
   const guard = data.guardBlend as number;
   const working = world.buildAnim > 0 && !world.attackAnim && !world.guarding;
+  const armed = data.armed as boolean;
   const offhand = data.offhand as THREE.Group;
   offhand.visible = !working;
-  poseDemonArm(rightArm, 1, dt);
+  poseDemonArm(
+    rightArm,
+    working
+      ? 0.62
+      : armed
+        ? 1
+        : world.guarding ||
+            (world.attackKind !== 'skill' && world.attackAnim > 0)
+          ? 0.92
+          : 0.38,
+    dt,
+  );
   poseDemonArm(
     leftArm,
     offhand.children.length && !working
@@ -1373,7 +1418,7 @@ function animateFirstPersonRig(
             : 0.38,
     dt,
   );
-  weapon.visible = !working;
+  weapon.visible = armed && !working;
   (data.hammer as THREE.Group).visible = working;
   rightArm.position.lerp(new THREE.Vector3(0.08, -0.18, -0.48), guard);
   rightArm.rotation.x -= guard * 0.45;
@@ -3133,9 +3178,10 @@ export function createGame3D(
     }),
   );
   scene.add(embers);
-  let firstPersonRig = buildFirstPersonRig('', 0),
+  let firstPersonRig = buildFirstPersonRig('', 0, null),
     playerJob = '',
-    playerRank = -1;
+    playerRank = -1,
+    playerWeapon: string | null | undefined = undefined;
   camera.add(firstPersonRig);
   const mobs = new Map<number, THREE.Group>(),
     nodes = new Map<number, THREE.Group>(),
@@ -3214,13 +3260,23 @@ export function createGame3D(
     pendingDt = 0;
     elapsed += dt;
     ensureSize();
-    if (world.job !== playerJob || world.rank !== playerRank) {
+    const equippedWeapon = world.equipment?.weapon ?? null;
+    if (
+      world.job !== playerJob ||
+      world.rank !== playerRank ||
+      equippedWeapon !== playerWeapon
+    ) {
       camera.remove(firstPersonRig);
       releaseModel(firstPersonRig);
-      firstPersonRig = buildFirstPersonRig(world.job, world.rank);
+      firstPersonRig = buildFirstPersonRig(
+        world.job,
+        world.rank,
+        equippedWeapon,
+      );
       camera.add(firstPersonRig);
       playerJob = world.job;
       playerRank = world.rank;
+      playerWeapon = equippedWeapon;
       lastX = world.x;
       lastY = world.y;
     }

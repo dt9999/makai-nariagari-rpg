@@ -14,8 +14,20 @@ import {
   exchangeItem,
   equipmentBonus,
   weaponFor,
+  weaponAppearance,
   lootFor,
 } from '../app/items.ts';
+
+test('weapon appearance follows equipped item family and safely supports bare hands', () => {
+  assert.equal(weaponAppearance(null), 'bare');
+  assert.equal(weaponAppearance(undefined), 'bare');
+  assert.equal(weaponAppearance('armor-0'), 'bare');
+  assert.equal(weaponAppearance('unknown-weapon'), 'bare');
+  for (const family of ['sword', 'axe', 'staff', 'dagger', 'spear', 'sigil']) {
+    for (let tier = 0; tier <= 3; tier++)
+      assert.equal(weaponAppearance(`${family}-${tier}`), family);
+  }
+});
 const owner = () => ({
   inventory: [],
   equipment: emptyEquipment(),
