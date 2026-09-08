@@ -1287,7 +1287,7 @@ const fresh = (): World => ({
   discovered: ['ruins'],
   discoveredSites: [],
   message: '職業を選び、魔王への一歩を踏み出せ。',
-  banner: '敵領土 — 隠れ家から始まる旅',
+  banner: '敵領土',
   bannerTime: 2,
   region: 'ruins',
   cd: 0,
@@ -3019,6 +3019,7 @@ export default function Home() {
           !hud.buildMode &&
           !activeConstructions.length &&
           !currentHazard &&
+          hud.bannerTime <= 0 &&
           !inCombat && (
             <TutorialHint
               state={hud.tutorial}
@@ -3295,12 +3296,16 @@ export default function Home() {
             </div>
           </div>
         )}
-        {hud.bannerTime > 0 && (
-          <div className={'territory-banner ' + currentOwner}>
-            <span>{hud.banner}</span>
-            <b>{current.name}</b>
-          </div>
-        )}
+        {hud.job &&
+          hud.bannerTime > 0 &&
+          !inCombat &&
+          !currentHazard &&
+          !hud.buildMode && (
+            <div className={'territory-banner ' + currentOwner}>
+              <span>{hud.banner}</span>
+              <b>{current.name}</b>
+            </div>
+          )}
         <button className="map-toggle" onClick={() => setMapOpen((v) => !v)}>
           <Map size={16} />
           世界地図 <kbd>{bindingName(bindings.map)}</kbd>

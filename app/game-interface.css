@@ -365,6 +365,27 @@
 .immersive-shell .territory-banner {
   top: 29%;
   pointer-events: none;
+  width: min(620px, calc(100% - 32px));
+  box-sizing: border-box;
+  padding: 14px 16px;
+  animation: realm-arrival 0.35s ease-out both;
+}
+@keyframes realm-arrival {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+}
+.immersive-shell .territory-banner span {
+  display: block;
+  font-size: clamp(20px, 4vw, 30px);
+  line-height: 1.4;
+  letter-spacing: 0.12em;
+  overflow-wrap: anywhere;
 }
 .immersive-shell .territory-banner b {
   font-size: 14px;
