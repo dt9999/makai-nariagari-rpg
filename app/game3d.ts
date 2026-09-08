@@ -2081,6 +2081,14 @@ function buildRiggedMob(mob: RenderMob) {
     pelvis = new THREE.Group();
     pelvis.position.y = large ? 1.0 : 0.76;
     motion.add(pelvis);
+    const anatomyRank = Math.max(0, Math.min(7, mob.tier + (large ? 2 : 0)));
+    mesh(
+      keepSharedAnatomy(demonPelvisGeometry(anatomyRank)),
+      baseMat,
+      [large ? 1.08 : 0.76, large ? 1 : 0.78, large ? 1.05 : 0.8],
+      [0, large ? 0.02 : 0, 0],
+      pelvis,
+    );
     const upperLeg = large ? 0.52 : 0.4;
     const lowerLeg = large ? 0.48 : 0.36;
     legs = [
@@ -2112,16 +2120,10 @@ function buildRiggedMob(mob: RenderMob) {
     torso = new THREE.Group();
     pelvis.add(torso);
     mesh(
-      new RoundedBoxGeometry(
-        large ? 0.84 : 0.6,
-        large ? 0.88 : 0.68,
-        large ? 0.5 : 0.4,
-        2,
-        0.07,
-      ),
+      keepSharedAnatomy(demonTorsoGeometry(anatomyRank)),
       baseMat,
-      [1, 1, 1],
-      [0, large ? 0.43 : 0.34, 0],
+      [large ? 1.08 : 0.74, large ? 1.02 : 0.79, large ? 1.06 : 0.82],
+      [0, 0, 0],
       torso,
     );
     if (large)
