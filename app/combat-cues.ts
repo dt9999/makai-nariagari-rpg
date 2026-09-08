@@ -5,6 +5,33 @@ export type DamageSource = {
   remaining: number;
 };
 
+type Fallen = {
+  x: number;
+  y: number;
+  dead?: boolean;
+  ally?: boolean;
+  boss?: boolean;
+  recruitTime?: number;
+};
+export function nearestRecruit<T extends Fallen>(
+  player: { x: number; y: number },
+  mobs: readonly T[],
+  radius = 120,
+): T | undefined {
+  let selected: T | undefined;
+  let distance = radius * radius;
+  for (const mob of mobs) {
+    if (!mob.dead || mob.ally || mob.boss || (mob.recruitTime ?? 0) <= 0)
+      continue;
+    const squared = (mob.x - player.x) ** 2 + (mob.y - player.y) ** 2;
+    if (squared < distance) {
+      selected = mob;
+      distance = squared;
+    }
+  }
+  return selected;
+}
+
 export function damageBearing(
   player: { x: number; y: number; viewYaw: number },
   source: DamageSource,

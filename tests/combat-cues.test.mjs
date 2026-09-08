@@ -1,6 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { damageBearing } from '../app/combat-cues.ts';
+import { damageBearing, nearestRecruit } from '../app/combat-cues.ts';
+
+test('recruit hints and actions select the same nearest eligible corpse within their exact range', () => {
+  const player = { x: 0, y: 0 };
+  const corpse = { x: 100, y: 0, dead: true, recruitTime: 7 };
+  const excluded = [
+    { ...corpse, x: 1, ally: true },
+    { ...corpse, x: 2, boss: true },
+    { ...corpse, x: 3, recruitTime: 0 },
+    { ...corpse, x: 4, dead: false },
+  ];
+  assert.equal(nearestRecruit(player, [...excluded, corpse]), corpse);
+  corpse.x = 120;
+  assert.equal(nearestRecruit(player, [corpse]), undefined);
+  assert.equal(nearestRecruit(player, [corpse], 360), corpse);
+  corpse.recruitTime = 0;
+  assert.equal(nearestRecruit(player, [corpse], 360), undefined);
+});
 import { constructionPoint, blockedByBuildings } from '../app/structures.ts';
 import { positionBlocked } from '../app/world.ts';
 

@@ -26,7 +26,11 @@ import {
 } from 'lucide-react';
 import { createDemonPreview, createGame3D } from './game3d';
 import { NearbyIndex, PatrolClock } from './simulation';
-import { damageBearing, type DamageSource } from './combat-cues';
+import {
+  damageBearing,
+  nearestRecruit,
+  type DamageSource,
+} from './combat-cues';
 import {
   initialHoldings,
   territoryOwner,
@@ -1833,16 +1837,7 @@ export default function Home() {
   const recruit = () => {
     const w = game.current;
     if (!w.job) return say('先に職業を選択しよう。');
-    const target = w.mobs
-      .filter(
-        (mob) =>
-          !mob.ally &&
-          !mob.boss &&
-          mob.dead &&
-          (mob.recruitTime || 0) > 0 &&
-          d(w, mob) < 120,
-      )
-      .sort((a, b) => d(w, a) - d(w, b))[0];
+    const target = nearestRecruit(w, w.mobs);
     if (!target)
       return say(
         '倒した領土ボス以外の魔物へ近づき、14秒以内に服従を命じよう。',
@@ -2980,6 +2975,8 @@ export default function Home() {
     return () => clearTimeout(timeout);
   }, [rankEvolution]);
   const current = regionAt(hud.x, hud.y),
+    recruitHint = nearestRecruit(hud, hud.mobs, 360),
+    recruitReady = recruitHint && d(hud, recruitHint) < 120,
     interaction = nearbyInteraction(hud, hud.loot, hud.nodes),
     currentHazard = hazardAt(hud.x, hud.y),
     currentOwner = ownerOf(hud, current),
@@ -3105,7 +3102,18 @@ export default function Home() {
             持ち物 <kbd>{bindingName(bindings.inventory)}</kbd>
           </button>
         )}
-        {hud.job && !inventoryOpen && interaction && (
+        {hud.job && !inventoryOpen && recruitHint && (
+          <div className="interaction-prompt recruit-prompt">
+            <kbd>{bindingName(bindings.recruit)}</kbd>
+            <span>
+              {recruitHint.name}
+              <br />
+              {recruitReady ? '服従できる' : '近づいて服従'} · 残り
+              {Math.ceil(recruitHint.recruitTime || 0)}秒
+            </span>
+          </div>
+        )}
+        {hud.job && !inventoryOpen && !recruitHint && interaction && (
           <div className="interaction-prompt">
             <kbd>{bindingName(bindings.gather)}</kbd>
             {interaction.label}
@@ -3942,9 +3950,12 @@ export default function Home() {
           </button>
         </div>
         <div className="utility-controls">
-          <button onClick={recruit}>
+          <button
+            onClick={recruit}
+            className={recruitReady ? 'recruit-ready' : undefined}
+          >
             <Users />
-            配下 <kbd>{bindingName(bindings.recruit)}</kbd>
+            服従 <kbd>{bindingName(bindings.recruit)}</kbd>
           </button>
           <button onClick={gather}>
             <Sparkles />

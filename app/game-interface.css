@@ -1092,6 +1092,20 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+
+.immersive-shell .utility-controls .recruit-ready {
+  border-color: #dec086;
+  background: #483b24;
+  color: #fff2ce;
+}
+.recruit-prompt {
+  max-width: calc(100% - 32px);
+}
+.recruit-prompt span {
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  line-height: 1.5;
+}
 @media (prefers-reduced-motion: reduce) {
   .game-panel,
   .immersive-shell .territory-banner,
