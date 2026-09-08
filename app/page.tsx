@@ -24,7 +24,6 @@ import {
   Wind,
   Zap,
 } from 'lucide-react';
-import { createDemonPreview, createGame3D } from './game3d';
 import {
   creatureAttackImpactProgress,
   type MonsterMotionKind,
@@ -1397,8 +1396,10 @@ export default function Home() {
     [pointerLocked, setPointerLocked] = useState(false),
     [dragLookOnly, setDragLookOnly] = useState(false),
     [rankEvolution, setRankEvolution] = useState<number | null>(null),
+    [rendererReady, setRendererReady] = useState(false),
     [bindings, setBindings] = useState({ ...DEFAULT_BINDINGS }),
     [listening, setListening] = useState<BindingAction | null>(null);
+  const rendererEnabled = !!hud.job;
   const sync = useCallback(
     () =>
       setHud({
@@ -2350,14 +2351,39 @@ export default function Home() {
   }, []);
   useEffect(() => {
     const c = canvas.current;
-    if (!c) return;
-    const view = createGame3D(c, REGIONS, setRenderPerformance);
+    if (!c || !rendererEnabled) {
+      setRendererReady(false);
+      return;
+    }
+    setRendererReady(false);
+    let cancelled = false,
+      loadFailed = false,
+      view: ReturnType<(typeof import('./game3d'))['createGame3D']> | undefined;
+    void import('./game3d')
+      .then(({ createGame3D }) => {
+        if (cancelled) return;
+        view = createGame3D(c, REGIONS, setRenderPerformance);
+        setRendererReady(true);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        loadFailed = true;
+        setRendererReady(true);
+        game.current.message =
+          '3D描画の読み込みに失敗しました。画面を再読み込みしてください。';
+        sync();
+      });
     const nearbyEnemies = new NearbyIndex<Mob>();
     const patrolClock = new PatrolClock();
     let last = performance.now(),
       frame = 0,
       id = 0;
     const loop = (now: number) => {
+      if (!view) {
+        last = now;
+        if (!loadFailed) id = requestAnimationFrame(loop);
+        return;
+      }
       let dt = Math.min(0.04, (now - last) / 1000);
       last = now;
       frame++;
@@ -2954,20 +2980,37 @@ export default function Home() {
     };
     id = requestAnimationFrame(loop);
     return () => {
+      cancelled = true;
       cancelAnimationFrame(id);
-      view.dispose();
+      view?.dispose();
     };
-  }, [sync]);
+  }, [rendererEnabled, sync]);
   const rankPreviewRef = useCallback(
     (node: HTMLCanvasElement | null) => {
       if (!node || !hud.job) return;
-      const preview = createDemonPreview(
-        node,
-        hud.job,
-        hud.rank,
-        hud.equipment.weapon,
-      );
-      return () => preview.dispose();
+      let cancelled = false,
+        dispose: (() => void) | undefined;
+      void import('./game3d')
+        .then(({ createDemonPreview }) => {
+          if (cancelled) return;
+          const preview = createDemonPreview(
+            node,
+            hud.job,
+            hud.rank,
+            hud.equipment.weapon,
+          );
+          dispose = preview.dispose;
+        })
+        .catch(() => {
+          if (cancelled) return;
+          game.current.message =
+            '全身3D表示の読み込みに失敗しました。画面を開き直してください。';
+          sync();
+        });
+      return () => {
+        cancelled = true;
+        dispose?.();
+      };
     },
     [hud.job, hud.rank, hud.equipment.weapon],
   );
@@ -3233,6 +3276,12 @@ export default function Home() {
           className="game-canvas"
           aria-label="リアルタイム3D魔界フィールド"
         />
+        {hud.job && !rendererReady && (
+          <div className="renderer-loading" role="status" aria-live="polite">
+            <Flame size={18} />
+            <span>魔界を構築中…</span>
+          </div>
+        )}
         {hud.job && (
           <>
             <div className="fps-crosshair" aria-hidden="true">

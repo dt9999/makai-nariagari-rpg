@@ -1176,3 +1176,30 @@
     bottom: calc(134px + var(--touch-rise) + (var(--touch-scale) - 1) * 114px);
   }
 }
+.renderer-loading {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 9px;
+  pointer-events: none;
+  background: radial-gradient(circle at center, #2b1739c9, #110918e8 62%);
+  color: #ffe0a4;
+  font-size: 0.875rem;
+  letter-spacing: 0.08em;
+}
+
+.renderer-loading svg {
+  color: #ff7958;
+  filter: drop-shadow(0 0 10px #ff593b);
+  animation: renderer-loading-pulse 0.85s ease-in-out infinite alternate;
+}
+
+@keyframes renderer-loading-pulse {
+  to {
+    transform: translateY(-4px) scale(1.08);
+    filter: drop-shadow(0 0 18px #ff9b58);
+  }
+}
