@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { sceneryBlocksTravel } from './travel-corridors';
 import { sceneryInsideBuilding, type StructureSite } from './structures';
 import { textureSurface, type RealmTextures } from './realm-textures';
 import {
@@ -306,11 +307,10 @@ export function createLandscape(scene: THREE.Scene, textures: RealmTextures) {
         x = x0 + random(seed) * 800,
         y = y0 + random(seed + 9) * 800,
         h = terrainHeight(x, y);
+      const propRadius = (0.35 + random(seed + 7) * 1.4) / SCALE;
       const inSite =
         sceneryInsideBuilding({ x, y }, buildings) ||
-        DISCOVERY_SITES.some(
-          (s) => Math.abs(s.x - x) < 260 && Math.abs(s.y - y) < 260,
-        );
+        sceneryBlocksTravel({ x, y }, propRadius + 20);
       const s = inSite ? 0.001 : 0.35 + random(seed + 7) * 1.4;
       dummy.position.set(worldX(x), h + s * 0.35, worldZ(y));
       dummy.scale.set(s, s * 0.65, s * 0.8);

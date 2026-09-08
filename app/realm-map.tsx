@@ -1,4 +1,5 @@
 'use client';
+import { territoryRoute } from './travel-corridors';
 /* oxlint-disable jsx-a11y/prefer-tag-over-role -- Live spatial markers require SVG rather than an img. */
 import { useState } from 'react';
 import { Map as MapIcon, Flag, Navigation } from 'lucide-react';
@@ -61,12 +62,7 @@ export function RealmMap({
     known = world.discovered.includes(region.id),
     lord = headquartersOf(region);
   const owns = world.conquered.includes(region.id);
-  const route = [
-    sites.find((s) => s.kind === 'camp')!,
-    sites.find((s) => s.kind === 'quarry')!,
-    sites.find((s) => s.kind === 'outpost')!,
-    lord,
-  ];
+  const route = territoryRoute(region);
   const discovered = (id: string) => world.discoveredSites.includes(id);
   const path = route
     .map((p) => `${p.x - region.x},${p.y - region.y}`)
@@ -91,9 +87,19 @@ export function RealmMap({
           </div>
           <DialogClose aria-label="地図を閉じる">閉じる</DialogClose>
         </header>
-        <label className="realm-mobile-select">表示する領土
-          <select value={region.id} onChange={(event) => setSelected(event.target.value)}>
-            {REGIONS.map((r, i) => <option key={r.id} value={r.id}>{i + 1}. {world.discovered.includes(r.id) ? r.name : '未知の領土'}{r.id === current.id ? '（現在地）' : ''}</option>)}
+        <label className="realm-mobile-select">
+          表示する領土
+          <select
+            value={region.id}
+            onChange={(event) => setSelected(event.target.value)}
+          >
+            {REGIONS.map((r, i) => (
+              <option key={r.id} value={r.id}>
+                {i + 1}.{' '}
+                {world.discovered.includes(r.id) ? r.name : '未知の領土'}
+                {r.id === current.id ? '（現在地）' : ''}
+              </option>
+            ))}
           </select>
         </label>
         <nav className="realm-regions" aria-label="表示する領土">
@@ -342,7 +348,10 @@ export function RealmMap({
               );
             })}
             {known && (
-              <button aria-label={`${region.landmark}を目的地に設定`} onClick={() => setTarget(lord)}>
+              <button
+                aria-label={`${region.landmark}を目的地に設定`}
+                onClick={() => setTarget(lord)}
+              >
                 <div>
                   <b>
                     <Flag size={16} /> {region.landmark}
