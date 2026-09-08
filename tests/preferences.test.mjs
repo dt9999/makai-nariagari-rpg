@@ -39,6 +39,7 @@ test('three quality levels strictly increase scene detail and cap mobile GPU cos
       'shadowSize',
       'distance',
       'enemyDistance',
+      'enemyDetailDistance',
       'particles',
       'allies',
     ])
@@ -47,6 +48,7 @@ test('three quality levels strictly increase scene detail and cap mobile GPU cos
     const m = qualityProfile(q, true);
     assert.ok(m.shadowSize <= 1024);
     assert.ok(m.pixelRatio <= 1.25);
+    assert.ok(m.enemyDetailDistance <= 720);
   }
   for (const q of ['low', 'medium', 'high'])
     assert.equal(qualityProfile(q, true).fps, 30);

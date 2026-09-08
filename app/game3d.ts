@@ -43,6 +43,7 @@ import {
   type RenderPerformance,
 } from './preferences';
 import {
+  creatureAttackImpactProgress,
   creatureAttackPose,
   type CreatureAttackPose,
   type MonsterMotionKind,
@@ -61,6 +62,17 @@ export type RenderRegion = {
   landmark: string;
 };
 type MonsterKind = MonsterMotionKind;
+const MONSTER_KINDS: MonsterKind[] = [
+  'imp',
+  'beast',
+  'insect',
+  'golem',
+  'flying',
+  'plant',
+  'slime',
+  'armored',
+  'aberration',
+];
 type RenderMob = {
   id: number;
   x: number;
@@ -3360,6 +3372,128 @@ export function createGame3D(
   armyBody.castShadow = armyHead.castShadow = !mobile;
   armyBody.frustumCulled = armyHead.frustumCulled = false;
   scene.add(armyBody, armyHead);
+  const enemyProxyCapacity = mobile ? 32 : 64;
+  const enemyProxyShape: Record<
+    MonsterKind,
+    {
+      body: THREE.BufferGeometry;
+      feature: THREE.BufferGeometry;
+      bodySize: [number, number, number];
+      bodyHeight: number;
+      featureSize: [number, number, number];
+      featureHeight: number;
+      featureForward?: number;
+      flying?: boolean;
+      bodyPitch?: number;
+    }
+  > = {
+    imp: {
+      body: geo.cylinder,
+      feature: geo.cone,
+      bodySize: [0.22, 0.64, 0.22],
+      bodyHeight: 0.32,
+      featureSize: [0.28, 0.38, 0.28],
+      featureHeight: 1.36,
+    },
+    beast: {
+      body: geo.cylinder,
+      feature: geo.lowSphere,
+      bodySize: [0.28, 0.66, 0.3],
+      bodyHeight: 0.3,
+      featureSize: [0.27, 0.24, 0.34],
+      featureHeight: 0.65,
+      featureForward: 0.68,
+      bodyPitch: Math.PI / 2,
+    },
+    insect: {
+      body: geo.lowSphere,
+      feature: geo.cone,
+      bodySize: [0.42, 0.22, 0.58],
+      bodyHeight: 0.22,
+      featureSize: [0.2, 0.45, 0.2],
+      featureHeight: 0.68,
+      featureForward: 0.52,
+    },
+    golem: {
+      body: geo.rock,
+      feature: geo.lowSphere,
+      bodySize: [0.48, 0.72, 0.4],
+      bodyHeight: 0.72,
+      featureSize: [0.3, 0.3, 0.3],
+      featureHeight: 1.55,
+    },
+    flying: {
+      body: geo.lowSphere,
+      feature: geo.box,
+      bodySize: [0.3, 0.2, 0.48],
+      bodyHeight: 1.75,
+      featureSize: [0.88, 0.06, 0.34],
+      featureHeight: 1.78,
+      flying: true,
+    },
+    plant: {
+      body: geo.cylinder,
+      feature: geo.cone,
+      bodySize: [0.3, 0.86, 0.3],
+      bodyHeight: 0.43,
+      featureSize: [0.62, 0.78, 0.62],
+      featureHeight: 1.68,
+    },
+    slime: {
+      body: geo.sphere,
+      feature: geo.lowSphere,
+      bodySize: [0.5, 0.38, 0.5],
+      bodyHeight: 0.36,
+      featureSize: [0.09, 0.09, 0.09],
+      featureHeight: 0.61,
+      featureForward: 0.35,
+    },
+    armored: {
+      body: geo.box,
+      feature: geo.lowSphere,
+      bodySize: [0.43, 0.76, 0.36],
+      bodyHeight: 0.38,
+      featureSize: [0.34, 0.31, 0.33],
+      featureHeight: 1.62,
+    },
+    aberration: {
+      body: geo.octa,
+      feature: geo.sphere,
+      bodySize: [0.48, 0.62, 0.48],
+      bodyHeight: 1.2,
+      featureSize: [0.22, 0.22, 0.22],
+      featureHeight: 1.94,
+      flying: true,
+    },
+  };
+  const enemyProxies = new Map<
+    MonsterKind,
+    { body: THREE.InstancedMesh; feature: THREE.InstancedMesh }
+  >();
+  const enemyProxyBuckets = new Map<MonsterKind, RenderMob[]>();
+  for (const kind of MONSTER_KINDS) {
+    const shape = enemyProxyShape[kind],
+      body = new THREE.InstancedMesh(
+        shape.body,
+        mats.enemy,
+        enemyProxyCapacity,
+      ),
+      feature = new THREE.InstancedMesh(
+        shape.feature,
+        kind === 'plant'
+          ? mats.foliage
+          : kind === 'golem' || kind === 'armored'
+            ? mats.stoneLight
+            : mats.crystal,
+        enemyProxyCapacity,
+      );
+    body.count = feature.count = 0;
+    body.castShadow = feature.castShadow = !mobile;
+    body.frustumCulled = feature.frustumCulled = false;
+    enemyProxies.set(kind, { body, feature });
+    enemyProxyBuckets.set(kind, []);
+    scene.add(body, feature);
+  }
   let elapsed = 0,
     lastX = Number.NaN,
     lastY = Number.NaN;
@@ -3623,6 +3757,7 @@ export function createGame3D(
       }
     const detailedAllyLimit = profile.allies;
     const detailedIds = new Set<number>();
+    for (const bucket of enemyProxyBuckets.values()) bucket.length = 0;
     const nearestAllies = new Set(
       world.mobs
         .filter((m) => m.ally && !m.dead)
@@ -3641,18 +3776,31 @@ export function createGame3D(
         visibleRange = mob.boss
           ? profile.distance + 800
           : profile.enemyDistance,
-        allyAllowed = !mob.ally || nearestAllies.has(mob.id);
+        allyAllowed = !mob.ally || nearestAllies.has(mob.id),
+        enemyDetailed =
+          !!mob.ally ||
+          !!mob.boss ||
+          dist < profile.enemyDetailDistance ||
+          (!!mobs.get(mob.id) && dist < profile.enemyDetailDistance * 1.16);
       let obj = mobs.get(mob.id);
       if (
         obj &&
-        (obj.userData.ally !== !!mob.ally || dist > visibleRange * 1.35)
+        (obj.userData.ally !== !!mob.ally ||
+          dist > visibleRange * 1.35 ||
+          !enemyDetailed)
       ) {
         scene.remove(obj);
         releaseModel(obj);
         mobs.delete(mob.id);
         obj = undefined;
       }
-      if (!obj && (dist >= visibleRange || !allyAllowed)) return;
+      if (!obj && (dist >= visibleRange || !allyAllowed || !enemyDetailed)) {
+        if (!mob.ally && !mob.boss && !mob.dead && dist < visibleRange) {
+          const bucket = enemyProxyBuckets.get(mob.kind || 'imp')!;
+          if (bucket.length < enemyProxyCapacity) bucket.push(mob);
+        }
+        return;
+      }
       if (!obj) {
         obj = buildRiggedMob(mob);
         mobs.set(mob.id, obj);
@@ -3698,6 +3846,52 @@ export function createGame3D(
         mob.ally ? 0x4de0b2 : mob.boss ? 0xff375f : 0xe95872,
       );
     });
+    for (const kind of MONSTER_KINDS) {
+      const units = enemyProxyBuckets.get(kind)!,
+        proxy = enemyProxies.get(kind)!,
+        shape = enemyProxyShape[kind];
+      proxy.body.count = proxy.feature.count = units.length;
+      units.forEach((unit, index) => {
+        const tierScale = [0.58, 0.68, 0.82, 1.03, 1.3, 1.62, 1.95][
+            Math.max(0, Math.min(6, unit.tier))
+          ],
+          ground = terrainHeight(unit.x, unit.y),
+          bob = shape.flying
+            ? Math.sin(elapsed * 2.1 + unit.id) * 0.09
+            : Math.sin(elapsed * 3.2 + unit.id) * 0.018,
+          yaw = Math.atan2(world.x - unit.x, world.y - unit.y),
+          forwardX = Math.sin(yaw) * (shape.featureForward || 0) * tierScale,
+          forwardZ = Math.cos(yaw) * (shape.featureForward || 0) * tierScale;
+        armyDummy.position.set(
+          worldX(unit.x),
+          ground + shape.bodyHeight * tierScale + bob,
+          worldZ(unit.y),
+        );
+        armyDummy.rotation.set(shape.bodyPitch || 0, yaw, 0);
+        armyDummy.scale.set(
+          shape.bodySize[0] * tierScale,
+          shape.bodySize[1] * tierScale,
+          shape.bodySize[2] * tierScale,
+        );
+        armyDummy.updateMatrix();
+        proxy.body.setMatrixAt(index, armyDummy.matrix);
+        armyDummy.position.set(
+          worldX(unit.x) + forwardX,
+          ground + shape.featureHeight * tierScale + bob,
+          worldZ(unit.y) + forwardZ,
+        );
+        armyDummy.rotation.set(0, yaw, 0);
+        armyDummy.scale.set(
+          shape.featureSize[0] * tierScale,
+          shape.featureSize[1] * tierScale,
+          shape.featureSize[2] * tierScale,
+        );
+        armyDummy.updateMatrix();
+        proxy.feature.setMatrixAt(index, armyDummy.matrix);
+      });
+      proxy.body.instanceMatrix.needsUpdate = true;
+      proxy.feature.instanceMatrix.needsUpdate = true;
+    }
     // LOD models represent real units at their actual positions, never invented troops.
     const proxyUnits = world.mobs
       .filter(
@@ -3796,9 +3990,10 @@ export function createGame3D(
     const bossImpact = world.mobs.some((mob) => {
       if (!mob.boss || !mob.attackAnim || !mob.attackTotal) return false;
       const progress = 1 - mob.attackAnim / mob.attackTotal;
+      const impact = creatureAttackImpactProgress(mob.kind || 'imp', true);
       return (
-        progress > 0.49 &&
-        progress < 0.59 &&
+        progress > impact - 0.045 &&
+        progress < impact + 0.045 &&
         Math.hypot(mob.x - world.x, mob.y - world.y) < 180
       );
     });

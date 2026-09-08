@@ -59,6 +59,7 @@ const PRESETS = {
     shadowSize: 0,
     distance: 1200,
     enemyDistance: 800,
+    enemyDetailDistance: 480,
     particles: 36,
     allies: 4,
     fps: 30,
@@ -68,6 +69,7 @@ const PRESETS = {
     shadowSize: 1024,
     distance: 2000,
     enemyDistance: 1350,
+    enemyDetailDistance: 720,
     particles: 90,
     allies: 8,
     fps: 60,
@@ -77,6 +79,7 @@ const PRESETS = {
     shadowSize: 2048,
     distance: 3000,
     enemyDistance: 1900,
+    enemyDetailDistance: 980,
     particles: 150,
     allies: 14,
     fps: 60,
@@ -89,6 +92,9 @@ export function qualityProfile(quality: Quality, mobile: boolean) {
     pixelRatio: mobile ? Math.min(preset.pixelRatio, 1.25) : preset.pixelRatio,
     shadowSize: mobile ? Math.min(preset.shadowSize, 1024) : preset.shadowSize,
     distance: mobile ? Math.min(preset.distance, 2200) : preset.distance,
+    enemyDetailDistance: mobile
+      ? Math.min(preset.enemyDetailDistance, 720)
+      : preset.enemyDetailDistance,
     fps: mobile ? 30 : preset.fps,
   };
 }
