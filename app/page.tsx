@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { createDemonPreview, createGame3D } from './game3d';
 import { NearbyIndex, PatrolClock } from './simulation';
+import { recruitmentCohort, recruitmentChance } from './recruitment';
 import {
   damageBearing,
   nearestRecruit,
@@ -1842,9 +1843,8 @@ export default function Home() {
       return say(
         '倒した領土ボス以外の魔物へ近づき、14秒以内に服従を命じよう。',
       );
-    const followers = w.mobs.filter(
-        (mob) => mob.commanderId === target.id && !mob.ally && !mob.boss,
-      ),
+    const joined = recruitmentCohort(target, w.mobs),
+      followers = joined.slice(1),
       playerMight =
         w.lv * 12 +
         w.rank * 22 +
@@ -1853,13 +1853,11 @@ export default function Home() {
           9 +
         (w.job === 'ruler' ? 20 : 0) +
         (w.unlocked.includes('dominate') ? 18 : 0),
-      targetMight = target.tier * 23 + followers.length * 5 + 12,
-      chance = Math.max(
-        0.08,
-        Math.min(
-          0.96,
-          0.38 + (playerMight - targetMight) / 125 + w.stats.leadership * 0.012,
-        ),
+      chance = recruitmentChance(
+        playerMight,
+        target.tier,
+        followers.length,
+        w.stats.leadership,
       ),
       rawRoll =
         Math.sin(target.id * 12.9898 + w.kills * 7.233 + w.minions * 2.417) *
@@ -1871,7 +1869,7 @@ export default function Home() {
       sync();
       return;
     }
-    const joined = [target, ...followers];
+    const firstRecruitment = w.roster.length === 0;
     joined.forEach((mob, index) => {
       const assignment: MinionTask = index ? 'guard' : 'combat';
       mob.ally = true;
@@ -1887,7 +1885,7 @@ export default function Home() {
     });
     w.minions = w.roster.length;
     completeLesson(w.tutorial, 'recruit');
-    if (w.minions === 1) w.achievements++;
+    if (firstRecruitment && w.minions > 0) w.achievements++;
     w.message =
       target.name +
       'が服従した！ 成功率 ' +
