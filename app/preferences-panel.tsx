@@ -83,7 +83,7 @@ export function PreferencesPanel({
           ))}
         </div>
         <p>
-          設定はすぐ反映されます。スマホでは解像度と影に上限を設け、「低・中」は30fpsを目標に描画します。
+          設定はすぐ反映されます。スマホでは全画質を30fps目標にし、負荷が続いた時だけ解像度を段階調整します。
         </p>
       </section>
       <section>
@@ -180,8 +180,13 @@ export function PreferencesPanel({
         <h3>この端末での描画計測</h3>
         {performance ? (
           <div className="performance-readout">
-            <b>{performance.fps.toFixed(1)} fps</b>
+            <b>
+              {performance.fps.toFixed(1)} / {performance.targetFps} fps
+            </b>
             <span>描画処理 {performance.frameMs.toFixed(1)} ms</span>
+            <span>
+              適応解像度 {Math.round(performance.resolutionScale * 100)}%
+            </span>
             <span>
               描画命令 {performance.drawCalls} / 三角形{' '}
               {performance.triangles.toLocaleString()}

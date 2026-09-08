@@ -89,14 +89,45 @@ export function qualityProfile(quality: Quality, mobile: boolean) {
     pixelRatio: mobile ? Math.min(preset.pixelRatio, 1.25) : preset.pixelRatio,
     shadowSize: mobile ? Math.min(preset.shadowSize, 1024) : preset.shadowSize,
     distance: mobile ? Math.min(preset.distance, 2200) : preset.distance,
-    fps: mobile && quality !== 'high' ? 30 : preset.fps,
+    fps: mobile ? 30 : preset.fps,
   };
 }
+
+export function adaptiveRenderScale(
+  current: number,
+  fps: number,
+  targetFps: number,
+  frameMs: number,
+  minimum = 0.65,
+) {
+  const safeCurrent = Number.isFinite(current) ? current : 1,
+    safeTarget = Math.max(1, Number.isFinite(targetFps) ? targetFps : 30),
+    safeMinimum = Math.max(
+      0.5,
+      Math.min(1, Number.isFinite(minimum) ? minimum : 0.65),
+    ),
+    scale = Math.max(safeMinimum, Math.min(1, safeCurrent)),
+    budget = 1000 / safeTarget,
+    overloaded =
+      !Number.isFinite(fps) ||
+      !Number.isFinite(frameMs) ||
+      fps < safeTarget * 0.82 ||
+      frameMs > budget * 0.92,
+    comfortable =
+      fps >= safeTarget * 0.96 && frameMs > 0 && frameMs < budget * 0.62;
+  if (overloaded)
+    return Math.round(Math.max(safeMinimum, scale - 0.1) * 100) / 100;
+  if (comfortable) return Math.round(Math.min(1, scale + 0.05) * 100) / 100;
+  return scale;
+}
+
 export type RenderPerformance = {
   fps: number;
+  targetFps: number;
   frameMs: number;
   drawCalls: number;
   triangles: number;
   geometries: number;
   textures: number;
+  resolutionScale: number;
 };

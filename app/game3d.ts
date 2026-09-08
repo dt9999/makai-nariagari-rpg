@@ -36,6 +36,7 @@ import {
   type WorldLoot,
 } from './items';
 import {
+  adaptiveRenderScale,
   DEFAULT_PREFERENCES,
   qualityProfile,
   type GamePreferences,
@@ -3363,6 +3364,9 @@ export function createGame3D(
     lastX = Number.NaN,
     lastY = Number.NaN;
   let currentQuality = '',
+    adaptiveScale = 1,
+    slowSamples = 0,
+    fastSamples = 0,
     pendingDt = 0,
     lastDraw = 0;
   let sampleStarted = performance.now(),
@@ -3388,7 +3392,11 @@ export function createGame3D(
     const qualityKey = `${preferences.quality}:${mobile}`;
     if (currentQuality !== qualityKey) {
       currentQuality = qualityKey;
-      renderer.setPixelRatio(Math.min(devicePixelRatio, profile.pixelRatio));
+      adaptiveScale = 1;
+      slowSamples = fastSamples = 0;
+      renderer.setPixelRatio(
+        Math.min(devicePixelRatio, profile.pixelRatio * adaptiveScale),
+      );
       renderer.shadowMap.enabled = profile.shadowSize > 0;
       sun.shadow.map?.dispose();
       sun.shadow.map = null;
@@ -3809,13 +3817,42 @@ export function createGame3D(
     sampleFrames++;
     sampleTime += performance.now() - now;
     if (now - sampleStarted >= 1500) {
+      const sampledFps = (sampleFrames * 1000) / (now - sampleStarted),
+        sampledFrameMs = sampleTime / sampleFrames,
+        frameBudget = 1000 / profile.fps,
+        overloaded =
+          sampledFps < profile.fps * 0.82 ||
+          sampledFrameMs > frameBudget * 0.92,
+        comfortable =
+          sampledFps >= profile.fps * 0.96 &&
+          sampledFrameMs < frameBudget * 0.62;
+      slowSamples = overloaded ? slowSamples + 1 : 0;
+      fastSamples = comfortable ? fastSamples + 1 : 0;
+      if (slowSamples >= 2 || fastSamples >= 3) {
+        const nextScale = adaptiveRenderScale(
+          adaptiveScale,
+          sampledFps,
+          profile.fps,
+          sampledFrameMs,
+          mobile ? 0.62 : 0.72,
+        );
+        if (nextScale !== adaptiveScale) {
+          adaptiveScale = nextScale;
+          renderer.setPixelRatio(
+            Math.min(devicePixelRatio, profile.pixelRatio * adaptiveScale),
+          );
+        }
+        slowSamples = fastSamples = 0;
+      }
       onPerformance?.({
-        fps: (sampleFrames * 1000) / (now - sampleStarted),
-        frameMs: sampleTime / sampleFrames,
+        fps: sampledFps,
+        targetFps: profile.fps,
+        frameMs: sampledFrameMs,
         drawCalls: renderer.info.render.calls,
         triangles: renderer.info.render.triangles,
         geometries: renderer.info.memory.geometries,
         textures: renderer.info.memory.textures,
+        resolutionScale: adaptiveScale,
       });
       sampleStarted = now;
       sampleFrames = 0;
