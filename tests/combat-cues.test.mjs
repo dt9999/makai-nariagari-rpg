@@ -4,7 +4,42 @@ import {
   damageBearing,
   nearestRecruit,
   retreatHostilesAfterDefeat,
+  selectAimCue,
 } from '../app/combat-cues.ts';
+
+test('aim guidance selects a visible crosshair target in one pass', () => {
+  const player = { x: 0, y: 0, facingX: 0, facingY: 1 };
+  const blocked = { id: 1, x: 0, y: 40 };
+  const ready = { id: 2, x: 8, y: 70 };
+  const behind = { id: 3, x: 0, y: -10 };
+  const cue = selectAimCue(
+    player,
+    [blocked, ready, behind],
+    100,
+    0.42,
+    (mob) => mob !== blocked,
+  );
+  assert.equal(cue.direct, ready);
+  assert.equal(cue.tracked, ready);
+  assert.equal(cue.clear, true);
+});
+
+test('aim guidance explains the best forward threat when blocked', () => {
+  const player = { x: 0, y: 0, facingX: 0, facingY: 1 };
+  const blocked = { id: 1, x: 0, y: 80 };
+  const distant = { id: 2, x: 10, y: 200 };
+  const cue = selectAimCue(
+    player,
+    [distant, blocked],
+    60,
+    0.42,
+    (mob) => mob !== blocked,
+  );
+  assert.equal(cue.direct, undefined);
+  assert.equal(cue.tracked, blocked);
+  assert.equal(cue.clear, false);
+  assert.equal(cue.distance, 80);
+});
 
 test('recruit hints and actions select the same nearest eligible corpse within their exact range', () => {
   const player = { x: 0, y: 0 };

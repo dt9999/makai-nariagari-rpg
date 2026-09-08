@@ -29,11 +29,16 @@ import {
   type MonsterMotionKind,
 } from './creature-motion';
 import { NearbyIndex, PatrolClock } from './simulation';
-import { recruitmentCohort, recruitmentChance } from './recruitment';
+import {
+  RECRUIT_WINDOW_SECONDS,
+  recruitmentCohort,
+  recruitmentChance,
+} from './recruitment';
 import {
   damageBearing,
   nearestRecruit,
   retreatHostilesAfterDefeat,
+  selectAimCue,
   type DamageSource,
 } from './combat-cues';
 import {
@@ -1378,6 +1383,7 @@ export default function Home() {
     game = useRef(fresh()),
     keys = useRef<Record<string, boolean>>({}),
     stick = useRef({ x: 0, y: 0, on: false }),
+    touchInput = useRef(false),
     joystickPointer = useRef<number | null>(null),
     lookTouch = useRef({ id: -1, x: 0, y: 0 }),
     bindingsRef = useRef({ ...DEFAULT_BINDINGS }),
@@ -1402,7 +1408,8 @@ export default function Home() {
     [rankEvolution, setRankEvolution] = useState<number | null>(null),
     [rendererReady, setRendererReady] = useState(false),
     [bindings, setBindings] = useState({ ...DEFAULT_BINDINGS }),
-    [listening, setListening] = useState<BindingAction | null>(null);
+    [listening, setListening] = useState<BindingAction | null>(null),
+    [touchAim, setTouchAim] = useState(false);
   const rendererEnabled = !!hud.job;
   const sync = useCallback(
     () =>
@@ -1541,7 +1548,11 @@ export default function Home() {
         : '目的地を解除した。',
     );
   };
-  const targetsAhead = (w: World, range: number, cone = 0.42) =>
+  const targetsAhead = (
+    w: World,
+    range: number,
+    cone = touchInput.current ? 0.24 : 0.42,
+  ) =>
     w.mobs
       .filter((mob) => {
         if (mob.ally || mob.dead) return false;
@@ -1680,7 +1691,7 @@ export default function Home() {
       w.message =
         t.name + 'を撃破！ ' + regionAt(t.x, t.y).name + 'を領土にした。';
     } else {
-      t.recruitTime = 14;
+      t.recruitTime = RECRUIT_WINDOW_SECONDS;
       w.ore++;
       gain(12 + t.tier * 5);
       const followers = w.mobs.filter(
@@ -1688,7 +1699,7 @@ export default function Home() {
       ).length;
       w.message =
         t.name +
-        'を撃破。14秒以内なら服従を試みられる。' +
+        `を撃破。${RECRUIT_WINDOW_SECONDS}秒以内なら服従を試みられる。` +
         (followers ? ` この隊長には配下が${followers}体いる。` : '');
     }
   };
@@ -1841,7 +1852,7 @@ export default function Home() {
     const target = nearestRecruit(w, w.mobs);
     if (!target)
       return say(
-        '倒した領土ボス以外の魔物へ近づき、14秒以内に服従を命じよう。',
+        `倒した領土ボス以外の魔物へ近づき、${RECRUIT_WINDOW_SECONDS}秒以内に服従を命じよう。`,
       );
     const joined = recruitmentCohort(target, w.mobs),
       followers = joined.slice(1),
@@ -2150,6 +2161,8 @@ export default function Home() {
     sync();
   };
   const updateJoystick = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!touchInput.current) setTouchAim(true);
+    touchInput.current = true;
     const rect = event.currentTarget.getBoundingClientRect();
     const x =
       (event.clientX - rect.left - rect.width / 2) / (rect.width * 0.42);
@@ -2295,6 +2308,8 @@ export default function Home() {
     const pointerDown = (e: PointerEvent) => {
       if (menuOpenRef.current) return;
       if (e.pointerType !== 'touch') return;
+      if (!touchInput.current) setTouchAim(true);
+      touchInput.current = true;
       e.preventDefault();
       const rect = c.getBoundingClientRect();
       if (e.clientX < rect.left + rect.width * 0.42) return;
@@ -3034,7 +3049,38 @@ export default function Home() {
     const timeout = setTimeout(() => setRankEvolution(null), 2600);
     return () => clearTimeout(timeout);
   }, [rankEvolution]);
-  const current = regionAt(hud.x, hud.y),
+  const currentJob = JOBS.find((j) => j.id === hud.job),
+    attackRange = currentJob
+      ? 100 *
+        currentJob.range *
+        (hud.unlocked.includes('dark-wave') || hud.unlocked.includes('thrust')
+          ? 1.18
+          : 1)
+      : 0,
+    aimCue = currentJob
+      ? selectAimCue(
+          hud,
+          hud.mobs,
+          attackRange,
+          touchAim ? 0.24 : 0.42,
+          (mob) => clearBuildingSight(hud, mob, hud.bases, hud.height + 0.9),
+        )
+      : undefined,
+    directlyAimed = aimCue?.direct,
+    trackedThreat = aimCue?.tracked,
+    trackedDistance = aimCue?.distance ?? 0,
+    trackedAim = aimCue?.alignment ?? 0,
+    trackedClear = aimCue?.clear ?? false,
+    aimReason = directlyAimed
+      ? '攻撃可能'
+      : trackedThreat && !trackedClear
+        ? '遮蔽物あり'
+        : trackedThreat && trackedAim <= 0.42
+          ? '照準を合わせる'
+          : trackedThreat
+            ? `あと${Math.max(1, Math.ceil((trackedDistance - attackRange) * 0.018))}m近づく`
+            : '',
+    current = regionAt(hud.x, hud.y),
     recruitHint = nearestRecruit(hud, hud.mobs, 360),
     recruitReady = recruitHint && d(hud, recruitHint) < 120,
     interaction = nearbyInteraction(hud, hud.loot, hud.nodes),
@@ -3048,7 +3094,6 @@ export default function Home() {
       hud.mobs.some((mob) => !mob.dead && !mob.ally && d(hud, mob) < 240),
     need = hud.lv * 34,
     ready = canRank(hud),
-    currentJob = JOBS.find((j) => j.id === hud.job),
     milestoneGroups = currentJob ? milestonesFor(currentJob.id) : [],
     activeConstructions = hud.bases.filter((site) => !site.complete),
     buildIssue = hud.buildMode
@@ -3301,10 +3346,25 @@ export default function Home() {
         )}
         {hud.job && (
           <>
-            <div className="fps-crosshair" aria-hidden="true">
+            <div
+              className={`fps-crosshair ${directlyAimed ? 'target-ready' : ''}`}
+              aria-hidden="true"
+            >
               <i />
               <i />
             </div>
+            {trackedThreat && !hud.buildMode && (
+              <div
+                className={`aim-target ${directlyAimed ? 'ready' : ''}`}
+                role="status"
+              >
+                <b>{trackedThreat.name}</b>
+                <span>
+                  {aimReason} ·{' '}
+                  {Math.max(1, Math.round(trackedDistance * 0.018))}m
+                </span>
+              </div>
+            )}
             {!pointerLocked && (
               <div className="fps-lock-hint">
                 <Crosshair size={13} />

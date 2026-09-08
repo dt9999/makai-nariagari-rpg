@@ -1117,6 +1117,55 @@
   text-overflow: ellipsis;
 }
 
+.fps-crosshair.target-ready {
+  filter: drop-shadow(0 0 5px #72f4bb);
+}
+.fps-crosshair.target-ready i {
+  background: #9affd2;
+}
+.fps-crosshair.target-ready:after {
+  border-color: #45dca2;
+}
+.aim-target {
+  position: absolute;
+  z-index: 6;
+  top: calc(50% + 27px);
+  left: 50%;
+  min-width: 150px;
+  max-width: min(260px, calc(100% - 32px));
+  transform: translateX(-50%);
+  padding: 5px 9px;
+  border: 1px solid #a6757777;
+  border-radius: 6px;
+  background: #150c18d9;
+  color: #eacfd0;
+  text-align: center;
+  pointer-events: none;
+}
+.aim-target b,
+.aim-target span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aim-target b {
+  font-size: 13px;
+}
+.aim-target span {
+  margin-top: 1px;
+  color: #bf9fa3;
+  font-size: 12px;
+}
+.aim-target.ready {
+  border-color: #55deb0aa;
+  background: #102b24e8;
+  color: #dcfff2;
+}
+.aim-target.ready span {
+  color: #8eebca;
+}
+
 .immersive-shell .utility-controls .recruit-ready {
   border-color: #dec086;
   background: #483b24;

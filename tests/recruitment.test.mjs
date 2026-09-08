@@ -1,6 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { recruitmentCohort, recruitmentChance } from '../app/recruitment.ts';
+import {
+  RECRUIT_WINDOW_SECONDS,
+  recruitmentCohort,
+  recruitmentChance,
+} from '../app/recruitment.ts';
+
+test('recruitment window leaves time for a ranged player to reach the fallen target', () => {
+  assert.ok(RECRUIT_WINDOW_SECONDS >= 20);
+});
 
 test('defeating a commander recruits subordinate captains and all their squads', () => {
   const commander = { id: 1, dead: true, recruitTime: 14 };

@@ -7,6 +7,8 @@ type Candidate = {
   recruitTime?: number;
 };
 
+export const RECRUIT_WINDOW_SECONDS = 24;
+
 /** Preserve real command chains, including captains with their own squads. */
 export function recruitmentCohort<T extends Candidate>(
   target: T,

@@ -5,6 +5,82 @@ export type DamageSource = {
   remaining: number;
 };
 
+type AimTarget = {
+  x: number;
+  y: number;
+  ally?: boolean;
+  dead?: boolean;
+};
+
+export type AimCue<T extends AimTarget> = {
+  direct?: T;
+  tracked?: T;
+  distance: number;
+  alignment: number;
+  clear: boolean;
+};
+
+/** Find the crosshair target and the best nearby guidance target in one pass. */
+export function selectAimCue<T extends AimTarget>(
+  player: { x: number; y: number; facingX: number; facingY: number },
+  mobs: readonly T[],
+  attackRange: number,
+  directCone: number,
+  hasClearSight: (target: T) => boolean,
+): AimCue<T> {
+  let direct: T | undefined,
+    directDistance = Infinity,
+    tracked: T | undefined,
+    trackedDistance = 0,
+    trackedAlignment = -Infinity,
+    trackedClear = false;
+  const trackingRange = Math.max(520, attackRange * 2.6);
+
+  for (const mob of mobs) {
+    if (mob.ally || mob.dead) continue;
+    const dx = mob.x - player.x,
+      dy = mob.y - player.y,
+      distance = Math.hypot(dx, dy) || 1,
+      alignment = (dx * player.facingX + dy * player.facingY) / distance;
+    if (distance >= trackingRange || alignment <= 0.2) continue;
+    const clear = hasClearSight(mob);
+
+    if (
+      distance < attackRange &&
+      alignment > directCone &&
+      clear &&
+      distance < directDistance
+    ) {
+      direct = mob;
+      directDistance = distance;
+    }
+    if (
+      alignment > trackedAlignment ||
+      (alignment === trackedAlignment && distance < trackedDistance)
+    ) {
+      tracked = mob;
+      trackedDistance = distance;
+      trackedAlignment = alignment;
+      trackedClear = clear;
+    }
+  }
+
+  if (direct)
+    return {
+      direct,
+      tracked: direct,
+      distance: directDistance,
+      alignment: 1,
+      clear: true,
+    };
+  return {
+    tracked,
+    distance: trackedDistance,
+    alignment: trackedAlignment,
+    clear: trackedClear,
+  };
+}
+
 type Fallen = {
   x: number;
   y: number;

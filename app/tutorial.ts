@@ -1,3 +1,5 @@
+import { RECRUIT_WINDOW_SECONDS } from './recruitment.ts';
+
 /** Session-local onboarding. Only successful gameplay events advance a lesson. */
 export const LESSONS = [
   {
@@ -47,7 +49,7 @@ export const LESSONS = [
   {
     id: 'recruit',
     title: '最初の配下を迎える',
-    text: '倒した普通の魔物へ14秒以内に服従を命じよう。成功率は実力差で変わる。拒まれたら別の魔物で試そう。領土ボスは配下にできない。',
+    text: `倒した普通の魔物へ${RECRUIT_WINDOW_SECONDS}秒以内に服従を命じよう。成功率は実力差で変わる。拒まれたら別の魔物で試そう。領土ボスは配下にできない。`,
     pc: '倒した魔物に近づいて {recruit}。',
     touch: '倒した魔物に近づいて「配下」。',
   },
