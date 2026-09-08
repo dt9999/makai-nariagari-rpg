@@ -40,6 +40,11 @@ import {
   type GamePreferences,
   type RenderPerformance,
 } from './preferences';
+import {
+  creatureAttackPose,
+  type CreatureAttackPose,
+  type MonsterMotionKind,
+} from './creature-motion';
 
 export type RenderRegion = {
   id: string;
@@ -53,16 +58,7 @@ export type RenderRegion = {
   owner: 'unknown' | 'wild' | 'enemy' | 'own';
   landmark: string;
 };
-type MonsterKind =
-  | 'imp'
-  | 'beast'
-  | 'insect'
-  | 'golem'
-  | 'flying'
-  | 'plant'
-  | 'slime'
-  | 'armored'
-  | 'aberration';
+type MonsterKind = MonsterMotionKind;
 type RenderMob = {
   id: number;
   x: number;
@@ -2558,6 +2554,20 @@ function animateMobRig(
       .copy(baseCoreScale)
       .multiplyScalar(1 + Math.sin(elapsed * 5.5 + mob.id) * 0.12);
   }
+  const attackProgress =
+      (mob.attackAnim || 0) > 0
+        ? clamp01(1 - (mob.attackAnim || 0) / (mob.attackTotal || 0.78))
+        : -1,
+    attackPose =
+      attackProgress >= 0
+        ? creatureAttackPose(
+            data.kind as MonsterKind,
+            attackProgress,
+            !!mob.boss,
+            data.attackPose as CreatureAttackPose | undefined,
+          )
+        : undefined;
+  if (attackPose) data.attackPose = attackPose;
   if (data.kind === 'imp' || data.kind === 'armored') {
     const pelvis = data.pelvis as THREE.Group,
       torso = data.torso as THREE.Group,
@@ -2592,30 +2602,18 @@ function animateMobRig(
       arm.upper.rotation.set(-wave * 0.32 * locomotion, 0, arm.side * 0.08);
       arm.lower.rotation.set(-0.12, 0, 0);
     });
-    if ((mob.attackAnim || 0) > 0) {
-      const progress = clamp01(
-        1 - (mob.attackAnim || 0) / (mob.attackTotal || 0.78),
-      );
-      const wind =
-        smoothRange(0, mob.boss ? 0.38 : 0.28, progress) *
-        (1 - smoothRange(mob.boss ? 0.43 : 0.34, 0.54, progress));
-      const strike =
-        smoothRange(mob.boss ? 0.36 : 0.26, 0.56, progress) *
-        (1 - smoothRange(0.68, 0.96, progress));
-      const weight = mob.boss ? 1.38 : 1;
-      pelvis.position.y -= wind * 0.11 * weight;
-      motion.position.z +=
-        smoothRange(0.25, 0.55, progress) *
-        (1 - smoothRange(0.64, 0.95, progress)) *
-        0.25 *
-        weight;
-      torso.rotation.y += (-0.38 * wind + 0.52 * strike) * weight;
-      torso.rotation.x += (0.2 * wind - 0.32 * strike) * weight;
-      arms[1].upper.rotation.x += (-1.15 * wind + 1.48 * strike) * weight;
-      arms[1].upper.rotation.z += (-0.65 * wind + 0.5 * strike) * weight;
+    if (attackPose) {
+      const wind = attackPose.anticipation,
+        strike = attackPose.strike;
+      pelvis.position.y -= wind * 0.11 + attackPose.impact * 0.035;
+      motion.position.z += attackPose.lunge * 0.3;
+      torso.rotation.y += attackPose.twist * 0.58;
+      torso.rotation.x += wind * 0.2 - strike * 0.32;
+      arms[1].upper.rotation.x += -1.15 * wind + 1.48 * strike;
+      arms[1].upper.rotation.z += -0.65 * wind + 0.5 * strike;
       arms[1].lower.rotation.x += -0.55 * wind + 0.28 * strike;
       arms[0].upper.rotation.x += -0.28 * wind + 0.4 * strike;
-      legs[0].lower.rotation.x += wind * 0.45;
+      legs[0].lower.rotation.x += attackPose.compression * 0.45;
     }
   } else if (data.kind === 'beast') {
     const torso = data.torso as THREE.Group,
@@ -2637,21 +2635,15 @@ function animateMobRig(
       0,
     );
     tail.rotation.z = Math.sin(elapsed * 4.2 + mob.id) * 0.28;
-    if ((mob.attackAnim || 0) > 0) {
-      const progress = clamp01(
-        1 - (mob.attackAnim || 0) / (mob.attackTotal || 0.78),
+    if (attackPose) {
+      torso.position.y -= attackPose.compression * 0.45;
+      motion.position.z += attackPose.lunge * 0.42;
+      motion.position.y += attackPose.lift * 0.28;
+      head.rotation.x -= attackPose.anticipation * 0.35;
+      head.rotation.x += attackPose.strike * 0.48;
+      legs.forEach(
+        (leg) => (leg.lower.rotation.x += attackPose.compression * 1.55),
       );
-      const crouch =
-        smoothRange(0, 0.3, progress) * (1 - smoothRange(0.36, 0.52, progress));
-      const leap =
-        smoothRange(0.28, 0.54, progress) *
-        (1 - smoothRange(0.68, 0.96, progress));
-      torso.position.y -= crouch * 0.18;
-      motion.position.z += leap * 0.38;
-      motion.position.y += leap * 0.12;
-      head.rotation.x -= crouch * 0.35;
-      head.rotation.x += leap * 0.48;
-      legs.forEach((leg) => (leg.lower.rotation.x += crouch * 0.62));
     }
   } else if (data.kind === 'insect') {
     const torso = data.torso as THREE.Group,
@@ -2684,18 +2676,18 @@ function animateMobRig(
     extras.slice(0, 2).forEach((mandible, index) => {
       mandible.rotation.z += Math.sin(elapsed * 5 + index * Math.PI) * 0.08;
     });
-    if ((mob.attackAnim || 0) > 0) {
-      const progress = clamp01(
-          1 - (mob.attackAnim || 0) / (mob.attackTotal || 0.68),
-        ),
-        snap = Math.sin(smoothRange(0.22, 0.62, progress) * Math.PI),
-        lunge =
-          smoothRange(0.28, 0.53, progress) *
-          (1 - smoothRange(0.64, 0.94, progress));
-      motion.position.z += lunge * 0.48;
-      torso.rotation.x -= snap * 0.24;
+    if (attackPose) {
+      motion.position.z += attackPose.lunge * 0.48;
+      torso.rotation.x +=
+        attackPose.anticipation * 0.12 - attackPose.strike * 0.28;
+      legs.forEach((leg) => {
+        leg.upper.rotation.z *= 1 - attackPose.compression * 0.22;
+        leg.lower.rotation.x -= attackPose.strike * 0.18;
+      });
       extras.slice(0, 2).forEach((mandible, index) => {
-        mandible.rotation.z += (index ? -1 : 1) * snap * 0.48;
+        mandible.rotation.z +=
+          (index ? -1 : 1) *
+          (-attackPose.anticipation * 0.24 + attackPose.impact * 0.58);
       });
     }
   } else if (data.kind === 'golem') {
@@ -2722,24 +2714,18 @@ function animateMobRig(
     });
     head.rotation.y =
       Math.sin(elapsed * 0.34 + mob.id) * 0.13 * (1 - locomotion);
-    if ((mob.attackAnim || 0) > 0) {
-      const progress = clamp01(
-          1 - (mob.attackAnim || 0) / (mob.attackTotal || 1.34),
-        ),
-        raise =
-          smoothRange(0, 0.38, progress) *
-          (1 - smoothRange(0.42, 0.55, progress)),
-        slam =
-          smoothRange(0.38, 0.58, progress) *
-          (1 - smoothRange(0.72, 0.98, progress));
-      pelvis.position.y -= slam * 0.16;
+    if (attackPose) {
+      const raise = attackPose.anticipation,
+        slam = attackPose.strike;
+      pelvis.position.y -= attackPose.impact * 0.2;
       torso.rotation.x = raise * -0.18 + slam * 0.32;
       arms.forEach((arm, index) => {
         arm.upper.rotation.x = -raise * 1.75 + slam * 1.25;
         arm.upper.rotation.z = (index ? 1 : -1) * (0.35 - raise * 0.2);
         arm.lower.rotation.x = -raise * 0.65 + slam * 0.28;
       });
-      motion.position.z += slam * 0.24;
+      motion.position.z += attackPose.lunge * 0.28;
+      motion.rotation.x += attackPose.impact * 0.08;
     }
   } else if (data.kind === 'flying') {
     const torso = data.torso as THREE.Group,
@@ -2764,19 +2750,19 @@ function animateMobRig(
     head.rotation.y =
       Math.sin(elapsed * 0.9 + mob.id) * 0.12 * (1 - locomotion);
     tail.rotation.z = Math.sin(elapsed * 3.4 + mob.id) * 0.3;
-    if ((mob.attackAnim || 0) > 0) {
-      const progress = clamp01(
-          1 - (mob.attackAnim || 0) / (mob.attackTotal || 0.92),
-        ),
-        dive =
-          smoothRange(0.18, 0.55, progress) *
-          (1 - smoothRange(0.68, 0.96, progress));
-      motion.position.y -= dive * (0.75 + baseScale * 0.18);
-      motion.position.z += dive * 0.62;
-      torso.rotation.x += dive * 0.72;
-      wings.forEach(
-        (wing, index) => (wing.rotation.z = (index ? -1 : 1) * 0.12),
-      );
+    if (attackPose) {
+      motion.position.y -=
+        attackPose.lift * (0.75 + baseScale * 0.18) -
+        attackPose.anticipation * 0.12;
+      motion.position.z += attackPose.lunge * 0.62;
+      torso.rotation.x +=
+        attackPose.strike * 0.72 - attackPose.anticipation * 0.16;
+      wings.forEach((wing, index) => {
+        const side = index ? -1 : 1;
+        wing.rotation.z =
+          side *
+          (0.12 + attackPose.anticipation * 0.52 - attackPose.strike * 0.08);
+      });
     }
   } else if (data.kind === 'plant') {
     const torso = data.torso as THREE.Group,
@@ -2804,18 +2790,21 @@ function animateMobRig(
       petal.scale.copy(basePetalScale);
       petal.scale.y *= 1 + Math.sin(elapsed * 2 + index) * 0.06;
     });
-    if ((mob.attackAnim || 0) > 0) {
-      const progress = clamp01(
-          1 - (mob.attackAnim || 0) / (mob.attackTotal || 1.18),
-        ),
-        lash = Math.sin(smoothRange(0.16, 0.68, progress) * Math.PI);
-      torso.rotation.x -= lash * 0.38;
-      motion.position.z += lash * 0.3;
-      arms.forEach((arm) => {
-        arm.upper.rotation.x -= lash * 0.92;
-        arm.lower.rotation.x += lash * 0.75;
+    if (attackPose) {
+      torso.rotation.x +=
+        attackPose.anticipation * 0.24 - attackPose.strike * 0.42;
+      torso.rotation.y += attackPose.twist * 0.18;
+      motion.position.z += attackPose.lunge * 0.3;
+      arms.forEach((arm, index) => {
+        const delay = index ? 0.86 : 1;
+        arm.upper.rotation.x +=
+          attackPose.anticipation * 0.34 - attackPose.strike * 0.98 * delay;
+        arm.lower.rotation.x += attackPose.strike * 0.78 * delay;
       });
-      head.rotation.x += lash * 0.34;
+      roots.forEach((root, index) => {
+        root.rotation.z += Math.sin(index * 1.7) * attackPose.impact * 0.22;
+      });
+      head.rotation.x += attackPose.strike * 0.34;
     }
   } else if (data.kind === 'aberration') {
     const torso = data.torso as THREE.Group,
@@ -2835,19 +2824,18 @@ function animateMobRig(
     extras.forEach((part, index) => {
       part.rotation.y += (index % 2 ? -1 : 1) * dt * 0.12;
     });
-    if ((mob.attackAnim || 0) > 0) {
-      const progress = clamp01(
-          1 - (mob.attackAnim || 0) / (mob.attackTotal || 1.28),
-        ),
-        gather =
-          smoothRange(0, 0.42, progress) *
-          (1 - smoothRange(0.5, 0.65, progress)),
-        release =
-          smoothRange(0.4, 0.64, progress) *
-          (1 - smoothRange(0.78, 1, progress));
-      motion.scale.multiplyScalar(1 - gather * 0.12 + release * 0.18);
-      motion.position.z += release * 0.34;
-      torso.rotation.y += gather * 0.8;
+    if (attackPose) {
+      motion.scale.multiplyScalar(
+        1 - attackPose.compression * 0.24 + attackPose.strike * 0.18,
+      );
+      motion.position.z += attackPose.lunge * 0.34;
+      torso.rotation.y +=
+        attackPose.anticipation * 0.8 + attackPose.twist * 0.16;
+      tentacles.forEach((tendril, index) => {
+        tendril.rotation.x +=
+          -attackPose.anticipation * 0.25 +
+          attackPose.strike * (0.35 + (index % 3) * 0.08);
+      });
     }
   } else {
     const slimeBody = data.slimeBody as THREE.Mesh;
@@ -2858,20 +2846,14 @@ function animateMobRig(
     slimeBody.scale.y *= 1 + Math.abs(bounce) * 0.18 * locomotion;
     slimeBody.scale.z *= 1 - bounce * 0.08 * locomotion;
     motion.position.y = Math.max(0, bounce) * 0.12 * locomotion;
-    if ((mob.attackAnim || 0) > 0) {
-      const progress = clamp01(
-        1 - (mob.attackAnim || 0) / (mob.attackTotal || 0.78),
-      );
-      const squash =
-        smoothRange(0, 0.34, progress) *
-        (1 - smoothRange(0.42, 0.56, progress));
-      const stretch =
-        smoothRange(0.32, 0.58, progress) *
-        (1 - smoothRange(0.7, 0.96, progress));
+    if (attackPose) {
+      const squash = attackPose.compression,
+        stretch = attackPose.strike;
       slimeBody.scale.y *= 1 - squash * 0.36 + stretch * 0.58;
       slimeBody.scale.x *= 1 + squash * 0.24 - stretch * 0.18;
       slimeBody.scale.z *= 1 + squash * 0.24 - stretch * 0.18;
-      motion.position.z += stretch * 0.32;
+      motion.position.z += attackPose.lunge * 0.36;
+      motion.position.y += attackPose.lift * 0.08;
     }
   }
   const working = !!mob.working && !mob.dead && !(mob.attackAnim || 0);

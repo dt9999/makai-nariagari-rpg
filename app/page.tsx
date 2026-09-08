@@ -25,6 +25,10 @@ import {
   Zap,
 } from 'lucide-react';
 import { createDemonPreview, createGame3D } from './game3d';
+import {
+  creatureAttackImpactProgress,
+  type MonsterMotionKind,
+} from './creature-motion';
 import { NearbyIndex, PatrolClock } from './simulation';
 import { recruitmentCohort, recruitmentChance } from './recruitment';
 import {
@@ -104,16 +108,7 @@ import {
 } from './world';
 
 type Owner = 'unknown' | 'wild' | 'enemy' | 'own';
-type MonsterKind =
-  | 'imp'
-  | 'beast'
-  | 'insect'
-  | 'golem'
-  | 'flying'
-  | 'plant'
-  | 'slime'
-  | 'armored'
-  | 'aberration';
+type MonsterKind = MonsterMotionKind;
 type Region = {
   id: string;
   name: string;
@@ -2842,7 +2837,11 @@ export default function Home() {
         nearbyEnemies.moved(m);
         if ((m.attackAnim || 0) > 0) {
           let progress = 1 - (m.attackAnim || 0) / (m.attackTotal || 0.78);
-          if (progress > 0.5 && !m.attackHit) {
+          if (
+            progress >
+              creatureAttackImpactProgress(m.kind || 'imp', !!m.boss) &&
+            !m.attackHit
+          ) {
             m.attackHit = true;
             if (m.ally) {
               let victim = w.mobs.find(
