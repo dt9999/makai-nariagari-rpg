@@ -2962,10 +2962,15 @@ export default function Home() {
   const rankPreviewRef = useCallback(
     (node: HTMLCanvasElement | null) => {
       if (!node || !hud.job) return;
-      const preview = createDemonPreview(node, hud.job, hud.rank);
+      const preview = createDemonPreview(
+        node,
+        hud.job,
+        hud.rank,
+        hud.equipment.weapon,
+      );
       return () => preview.dispose();
     },
-    [hud.job, hud.rank],
+    [hud.job, hud.rank, hud.equipment.weapon],
   );
   useEffect(() => {
     if (rankEvolution === null) return;

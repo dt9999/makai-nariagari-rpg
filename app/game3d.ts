@@ -848,7 +848,11 @@ function createJointLimb(
   return { upper, lower, end, side };
 }
 
-function buildRiggedPlayer(job: string, rank = 0) {
+function buildRiggedPlayer(
+  job: string,
+  rank = 0,
+  equippedWeapon?: string | null,
+) {
   const root = new THREE.Group();
   addShadow(root, 0.58);
   const motion = new THREE.Group();
@@ -1110,10 +1114,18 @@ function buildRiggedPlayer(job: string, rank = 0) {
       wingBlade.rotation.x = -0.35;
     }
   }
-  const weapon = buildWeapon(job, color);
+  const weaponKind = weaponAppearance(equippedWeapon),
+    weapon = buildWeapon(weaponKind, color);
   weapon.position.set(0, -0.04, 0.02);
   weapon.rotation.z = -0.24;
   arms[1].end.add(weapon);
+  if (weaponKind === 'dagger') {
+    const leftDagger = weapon.children[0];
+    arms[0].end.add(leftDagger);
+    leftDagger.position.set(0, -0.04, 0.02);
+    leftDagger.rotation.z = 0.24;
+    weapon.children[0].position.x = 0;
+  }
   const shield = new THREE.Group();
   const plate = mesh(
     new THREE.CylinderGeometry(0.34, 0.27, 0.12, 10),
@@ -3707,6 +3719,7 @@ export function createDemonPreview(
   canvas: HTMLCanvasElement,
   job: string,
   rank: number,
+  equippedWeapon?: string | null,
 ) {
   const renderer = new THREE.WebGLRenderer({
     canvas,
@@ -3751,7 +3764,7 @@ export function createDemonPreview(
   );
   floor.rotation.x = -Math.PI / 2;
   floor.receiveShadow = true;
-  const demon = buildRiggedPlayer(job, rank);
+  const demon = buildRiggedPlayer(job, rank, equippedWeapon);
   demon.rotation.y = -0.28;
   scene.add(demon);
   const reveal = new THREE.Group(),
