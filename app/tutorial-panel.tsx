@@ -1,13 +1,14 @@
-"use client";
-import { BookOpen, Check, ChevronRight, X } from "lucide-react";
-import { GamePanel } from "./game-interface";
+'use client';
+import { BookOpen, Check, ChevronRight, X } from 'lucide-react';
+import { GamePanel } from './game-interface';
 import {
   LESSONS,
   currentLesson,
   lessonKeys,
   type TutorialState,
-} from "./tutorial";
-import "./tutorial.css";
+} from './tutorial';
+import './tutorial.css';
+import { HudIcon } from './hud-art';
 
 export function TutorialHint({
   state,
@@ -23,12 +24,13 @@ export function TutorialHint({
   return (
     <aside className="tutorial-hint" aria-label="次の練習">
       <button onClick={onOpen} className="tutorial-next">
-        <BookOpen size={18} />
+        <HudIcon kind="guide" />
         <span>
           <small>
             冒険の手引き · {state.completed.length}/{LESSONS.length}
           </small>
           <b>{lesson.title}</b>
+          <em className="tutorial-description">{lesson.text}</em>
         </span>
         <ChevronRight size={18} />
       </button>
@@ -73,11 +75,11 @@ export function TutorialPanel({
       <div className="tutorial-intro">
         <p>
           {next
-            ? "好きな順番で試せます。実際にできた操作は自動で記録されます。"
-            : "基本の練習をすべて達成！ 次は領土ボスへ挑むための準備を進めよう。"}
+            ? '好きな順番で試せます。実際にできた操作は自動で記録されます。'
+            : '基本の練習をすべて達成！ 次は領土ボスへ挑むための準備を進めよう。'}
         </p>
         <button onClick={onToggle}>
-          {state.hidden ? "画面のガイドを表示" : "画面のガイドを非表示"}
+          {state.hidden ? '画面のガイドを表示' : '画面のガイドを非表示'}
         </button>
       </div>
       <ol className="tutorial-lessons">
@@ -86,11 +88,11 @@ export function TutorialPanel({
           return (
             <li
               key={lesson.id}
-              className={`${done ? "done" : ""} ${next?.id === lesson.id ? "current" : ""}`}
+              className={`${done ? 'done' : ''} ${next?.id === lesson.id ? 'current' : ''}`}
             >
               <div
                 className="lesson-number"
-                aria-label={done ? "達成" : `練習${index + 1}`}
+                aria-label={done ? '達成' : `練習${index + 1}`}
               >
                 {done ? <Check size={20} /> : index + 1}
               </div>

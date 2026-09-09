@@ -34,19 +34,21 @@ test('anatomical loft has outward normals, closed ends and a varying wrist silho
   geometry.dispose();
 });
 
-test('both hands at all eight ranks have five separate articulated fingers and bounded geometry', () => {
+test('both arms use one bounded, fingerless mitten volume at all eight ranks', () => {
   for (const side of [-1, 1])
     for (let rank = 0; rank <= 7; rank++) {
       const arm = createDemonArm(side, rank, materials);
-      for (const name of [
+      const mitten = arm.getObjectByName('指を分けないミトン型の革手袋');
+      assert.ok(mitten instanceof THREE.Mesh);
+      for (const oldFinger of [
         '人差し指',
         '中指',
         '薬指',
         '小指',
         '対向する二関節の親指',
       ])
-        assert.ok(arm.getObjectByName(name));
-      assert.equal(arm.userData.flex.length, 10);
+        assert.equal(arm.getObjectByName(oldFinger), undefined);
+      assert.deepEqual(arm.userData.flex, []);
       let vertices = 0;
       arm.traverse((mesh) => {
         if (!(mesh instanceof THREE.Mesh)) return;
@@ -57,12 +59,8 @@ test('both hands at all eight ranks have five separate articulated fingers and b
               Number.isFinite,
             ),
           );
-        assert.ok(
-          mesh.geometry.boundingSphere === null ||
-            Number.isFinite(mesh.geometry.boundingSphere.radius),
-        );
       });
-      assert.ok(vertices < 6000, `${side}/${rank}: ${vertices} vertices`);
+      assert.ok(vertices < 3000, `${side}/${rank}: ${vertices} vertices`);
       assert.equal(
         !!arm.getObjectByName('身体とは別の金属製前腕甲'),
         rank >= 3,
@@ -71,41 +69,25 @@ test('both hands at all eight ranks have five separate articulated fingers and b
     }
 });
 
-test('finger poses preserve their attached roots and interpolate rather than detach joint meshes', () => {
+test('fingerless hand posing remains finite and keeps the mitten geometry rigid', () => {
   const arm = createDemonArm(1, 0, materials);
-  for (const name of [
-    '人差し指',
-    '中指',
-    '薬指',
-    '小指',
-    '対向する二関節の親指',
-  ]) {
-    const finger = arm.getObjectByName(name);
-    const open = finger.geometry.getAttribute('position'),
-      closed = finger.geometry.morphAttributes.position[0];
-    assert.equal(open.count, closed.count);
-    // The capped root centre is invariant even while the rest of the finger flexes.
-    for (const axis of ['getX', 'getY', 'getZ'])
-      assert.ok(
-        Math.abs(open[axis](open.count - 2) - closed[axis](closed.count - 2)) <
-          1e-6,
-      );
-  }
+  const mitten = arm.getObjectByName('指を分けないミトン型の革手袋');
+  const before = Array.from(mitten.geometry.getAttribute('position').array);
   poseDemonArm(arm, 0, 1 / 60);
-  assert.ok(arm.userData.grip > 0 && arm.userData.grip < 1);
-  for (let frame = 0; frame < 60; frame++) poseDemonArm(arm, 0, 1 / 60);
-  assert.ok(arm.userData.grip < 0.001);
-  for (const mesh of arm.userData.flex)
-    assert.equal(mesh.morphTargetInfluences[0], arm.userData.grip);
-  poseDemonArm(arm, NaN, Infinity);
+  for (let frame = 0; frame < 60; frame++) poseDemonArm(arm, 1, 1 / 60);
+  poseDemonArm(arm, Number.NaN, Infinity);
   assert.ok(Number.isFinite(arm.userData.grip));
+  assert.deepEqual(
+    Array.from(mitten.geometry.getAttribute('position').array),
+    before,
+  );
   dispose(arm);
 });
 
-test('left and right anatomical volumes are mirrored without negative mesh scales', () => {
+test('left and right forearms and mittens mirror without negative mesh scales', () => {
   const left = createDemonArm(-1, 0, materials),
     right = createDemonArm(1, 0, materials);
-  for (const name of ['肘から手首へ続く前腕', '掌・母指球・手根']) {
+  for (const name of ['肘から手首へ続く前腕', '指を分けないミトン型の革手袋']) {
     const a = left.getObjectByName(name).geometry,
       b = right.getObjectByName(name).geometry;
     a.computeBoundingBox();

@@ -85,6 +85,10 @@ import {
 } from './game-interface';
 import './inventory.css';
 import './game-interface.css';
+import './obsidian-hud.css';
+import { HudArt, HudIcon } from './hud-art';
+import { decodeGameSave, encodeGameSave, GAME_SAVE_KEY } from './save-game';
+import { finalBattleStatus, finalCastle } from './final-battle';
 import {
   emptyEquipment,
   equipmentBonus,
@@ -145,6 +149,7 @@ type Mob = {
   name: string;
   tier: number;
   boss?: boolean;
+  hero?: boolean;
   ally?: boolean;
   kind?: MonsterKind;
   variant?: number;
@@ -371,6 +376,7 @@ type World = {
   lands: number;
   kills: number;
   bossKills: number;
+  heroDefeated: boolean;
   achievements: number;
   mobs: Mob[];
   nodes: Node[];
@@ -1301,6 +1307,7 @@ const fresh = (): World => ({
   base: 1,
   kills: 0,
   bossKills: 0,
+  heroDefeated: false,
   achievements: 0,
   mobs: spawn(),
   nodes: resources(),
@@ -1406,6 +1413,7 @@ export default function Home() {
     listeningRef = useRef<BindingAction | null>(null),
     menuOpenRef = useRef(false),
     quickMenuRef = useRef<string | null>(null),
+    saveReadyRef = useRef(false),
     [hud, setHud] = useState<World>(fresh),
     [mapOpen, setMapOpen] = useState(false),
     [rankOpen, setRankOpen] = useState(false),
@@ -1464,6 +1472,47 @@ export default function Home() {
     game.current.message = s;
     sync();
   };
+  const saveAdventure = useCallback(() => {
+    if (!saveReadyRef.current || !game.current.job) return;
+    try {
+      localStorage.setItem(GAME_SAVE_KEY, encodeGameSave(game.current));
+    } catch {
+      /* The current session remains playable if device storage is unavailable. */
+    }
+  }, []);
+  useEffect(() => {
+    try {
+      const source = localStorage.getItem(GAME_SAVE_KEY);
+      const restored = source ? decodeGameSave(source, fresh()) : null;
+      if (restored) {
+        restored.preferences = sanitizePreferences(restored.preferences);
+        restored.message = '自動保存した冒険を再開した。';
+        restored.bannerTime = 0;
+        game.current = restored;
+      } else if (source) {
+        localStorage.removeItem(GAME_SAVE_KEY);
+      }
+    } catch {
+      /* Invalid or blocked storage starts a new local adventure. */
+    }
+    saveReadyRef.current = true;
+    sync();
+  }, [sync]);
+  useEffect(() => {
+    const interval = window.setInterval(saveAdventure, 5000);
+    const saveWhenLeaving = () => saveAdventure();
+    const saveWhenHidden = () => {
+      if (document.visibilityState === 'hidden') saveAdventure();
+    };
+    addEventListener('pagehide', saveWhenLeaving);
+    document.addEventListener('visibilitychange', saveWhenHidden);
+    return () => {
+      clearInterval(interval);
+      removeEventListener('pagehide', saveWhenLeaving);
+      document.removeEventListener('visibilitychange', saveWhenHidden);
+      saveAdventure();
+    };
+  }, [saveAdventure]);
   const changePreferences = (value: GamePreferences) => {
     game.current.preferences = sanitizePreferences(value);
     try {
@@ -1696,7 +1745,15 @@ export default function Home() {
       claimed: false,
     });
     w.kills++;
-    if (t.boss) {
+    if (t.hero) {
+      gain(600);
+      w.heroDefeated = true;
+      w.achievements += 3;
+      w.banner = '勇者撃破';
+      w.bannerTime = 5;
+      w.message =
+        '暁断の勇者レオニスを撃破！ 最弱の魔族は、魔界を守る真の魔王となった。';
+    } else if (t.boss) {
       gain(80 + t.tier * 20);
       w.bossKills++;
       conquerTerritory(w, t.home);
@@ -2174,6 +2231,44 @@ export default function Home() {
       w.rank === 7
         ? '魔王戴冠！ レベルだけでは届かない覇道を成し遂げた。'
         : '魔族ランク ' + RANKS[w.rank] + ' に昇格！';
+    sync();
+  };
+  const challengeHero = () => {
+    const w = game.current;
+    const activeHero = w.mobs.some((mob) => mob.hero && !mob.dead);
+    const status = finalBattleStatus(w, w.bases, activeHero);
+    if (!status.canStart) return say(status.message);
+    const castle = finalCastle(w.bases);
+    if (!castle) return say('完成した魔王城が必要だ。');
+    const spawnDistance = 430;
+    w.mobs.push({
+      id: 20001,
+      x: castle.x + Math.sin(castle.yaw) * spawnDistance,
+      y: castle.y + Math.cos(castle.yaw) * spawnDistance,
+      anchorX: castle.x,
+      anchorY: castle.y,
+      hp: 1450,
+      max: 1450,
+      name: '暁断の勇者レオニス',
+      kind: 'armored',
+      variant: 4,
+      tier: 9,
+      boss: true,
+      hero: true,
+      home: regionAt(castle.x, castle.y).id,
+      attackAnim: 0,
+      attackCd: 1.2,
+    });
+    w.waypoint = {
+      id: 'final-castle',
+      x: castle.x,
+      y: castle.y,
+      name: '魔王城・勇者迎撃地点',
+    };
+    w.banner = '最終決戦';
+    w.bannerTime = 4;
+    w.message =
+      '人界最強の勇者が魔王城へ侵入した。配下と共に、最後の戦いへ挑め。';
     sync();
   };
   const updateJoystick = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -3133,6 +3228,8 @@ export default function Home() {
     activeBoss = hud.mobs.find(
       (mob) => mob.boss && !mob.dead && mob.home === current.id,
     ),
+    activeHero = hud.mobs.some((mob) => mob.hero && !mob.dead),
+    heroStatus = finalBattleStatus(hud, hud.bases, activeHero),
     siegeStatus = territorySiegeStatus(hud, current, !!activeBoss),
     recruitHint = nearestRecruit(hud, hud.mobs, 360),
     recruitReady = recruitHint && d(hud, recruitHint) < 120,
@@ -3176,21 +3273,26 @@ export default function Home() {
         }
         className={`game-frame open-world ${hud.job ? 'playing' : 'choosing'} ${mapOpen || rankOpen || growthOpen || transferOpen || controlsOpen || minionOpen || buildMenuOpen || inventoryOpen || adventureOpen || guideOpen ? 'menu-visible' : ''}`}
       >
-        {hud.job &&
-          !hud.buildMode &&
-          !activeConstructions.length &&
-          !currentHazard &&
-          hud.bannerTime <= 0 &&
-          !inCombat && (
-            <TutorialHint
-              state={hud.tutorial}
-              onOpen={() => openScreen('guide')}
-              onHide={() => {
-                game.current.tutorial.hidden = true;
-                sync();
-              }}
-            />
-          )}
+        <div className="hud-guidance">
+          {hud.job &&
+            !hud.buildMode &&
+            !activeConstructions.length &&
+            !currentHazard &&
+            hud.bannerTime <= 0 &&
+            !inCombat && (
+              <TutorialHint
+                state={hud.tutorial}
+                onOpen={() => openScreen('guide')}
+                onHide={() => {
+                  game.current.tutorial.hidden = true;
+                  sync();
+                }}
+              />
+            )}
+          <div className="notice" role="status">
+            {hud.message}
+          </div>
+        </div>
         {guideOpen && (
           <TutorialPanel
             state={hud.tutorial}
@@ -3205,6 +3307,9 @@ export default function Home() {
         {hud.job && (
           <AdventureHUD
             world={hud}
+            viewYaw={hud.viewYaw}
+            mapKey={bindingName(bindings.map)}
+            inventoryKey={bindingName(bindings.inventory)}
             jobName={currentJob?.name || ''}
             rankName={RANKS[hud.rank]}
             regionName={current.name}
@@ -3235,14 +3340,20 @@ export default function Home() {
             stats={hud}
             raidStatus={siegeStatus.label}
             raidReady={siegeStatus.canStart}
+            heroStatus={heroStatus}
             onClose={() => setAdventureOpen(false)}
             onSelect={openScreen}
             onRaid={() => {
               setAdventureOpen(false);
               raid();
             }}
+            onHero={() => {
+              setAdventureOpen(false);
+              challengeHero();
+            }}
             onRestart={() => {
               const preferences = game.current.preferences;
+              localStorage.removeItem(GAME_SAVE_KEY);
               game.current = fresh();
               game.current.preferences = preferences;
               setAdventureOpen(false);
@@ -4070,9 +4181,6 @@ export default function Home() {
                 : 'まだ誰の領土でもない'}
           </small>
         </div>
-        <div className="notice" role="status">
-          {hud.message}
-        </div>
         {!!activeConstructions.length && (
           <div className="construction-status">
             {activeConstructions.slice(0, 2).map((site) => {
@@ -4104,12 +4212,14 @@ export default function Home() {
         )}
         <div className="combat-controls">
           <button className="action attack" onClick={attack}>
-            <Swords />
+            <HudArt kind="attack" />
+            <HudIcon kind="attack" />
             <span>攻撃</span>
             <kbd>左クリック</kbd>
           </button>
           <button className="action heavy" onClick={heavyAttack}>
-            <Hammer />
+            <HudArt kind="hex" />
+            <HudIcon kind="heavy" />
             <span>強攻撃</span>
             <kbd>{bindingName(bindings.heavy)}</kbd>
           </button>
@@ -4135,17 +4245,20 @@ export default function Home() {
               game.current.guarding = false;
             }}
           >
-            <Shield />
+            <HudArt kind="hex" />
+            <HudIcon kind="guard" />
             <span>防御</span>
             <kbd>右クリック / {bindingName(bindings.guard)}</kbd>
           </button>
           <button className="action evade" onClick={dodge}>
-            <Wind />
+            <HudArt kind="hex" />
+            <HudIcon kind="evade" />
             <span>回避</span>
             <kbd>{bindingName(bindings.dodge)}</kbd>
           </button>
           <button className="action combat-skill" onClick={useCombatSkill}>
-            <Zap />
+            <HudArt kind="hex" />
+            <HudIcon kind="skill" />
             <span>
               {hud.skillCd > 0
                 ? `スキル ${Math.ceil(hud.skillCd)}秒`
@@ -4154,7 +4267,8 @@ export default function Home() {
             <kbd>{bindingName(bindings.skill)}</kbd>
           </button>
           <button className="action jump" onClick={jump}>
-            <ChevronUp />
+            <HudArt kind="hex" />
+            <HudIcon kind="jump" />
             <span>跳ぶ</span>
             <kbd>{bindingName(bindings.jump)}</kbd>
           </button>
@@ -4164,12 +4278,14 @@ export default function Home() {
             onClick={recruit}
             className={recruitReady ? 'recruit-ready' : undefined}
           >
-            <Users />
-            服従 <kbd>{bindingName(bindings.recruit)}</kbd>
+            <HudArt kind="utility" />
+            <HudIcon kind="recruit" />
+            <span>服従</span> <kbd>{bindingName(bindings.recruit)}</kbd>
           </button>
           <button onClick={gather}>
-            <Sparkles />
-            調べる <kbd>{bindingName(bindings.gather)}</kbd>
+            <HudArt kind="utility" />
+            <HudIcon kind="gather" />
+            <span>調べる</span> <kbd>{bindingName(bindings.gather)}</kbd>
           </button>
           <button
             onClick={() => {
@@ -4202,7 +4318,8 @@ export default function Home() {
           onClick={toggleAutoRun}
           aria-pressed={hud.autoRun}
         >
-          <Footprints />
+          <HudArt kind="utility" />
+          <HudIcon kind="run" />
           <span>{hud.autoRun ? '自動移動を停止' : '自動前進'}</span>
           <kbd>{bindingName(bindings.autoRun)}</kbd>
         </button>

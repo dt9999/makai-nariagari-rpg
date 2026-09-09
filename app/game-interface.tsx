@@ -15,6 +15,8 @@ import {
   Users,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { HudArt, HudIcon } from './hud-art';
+import type { FinalBattleStatus } from './final-battle';
 
 export type GameScreen =
   | 'inventory'
@@ -121,6 +123,8 @@ export function AdventureMenu({
   onRaid,
   raidStatus,
   raidReady,
+  heroStatus,
+  onHero,
   stats,
 }: {
   onClose: () => void;
@@ -129,6 +133,8 @@ export function AdventureMenu({
   onRaid: () => void;
   raidStatus: string;
   raidReady: boolean;
+  heroStatus: FinalBattleStatus;
+  onHero: () => void;
   stats: {
     wood: number;
     ore: number;
@@ -187,13 +193,19 @@ export function AdventureMenu({
       >
         <Castle /> 領主に挑戦 <span>{raidStatus}</span>
       </button>
+      <button
+        className={`hero-challenge ${heroStatus.canStart ? 'ready' : ''}`}
+        onClick={onHero}
+      >
+        <Shield /> 勇者との最終決戦 <span>{heroStatus.label}</span>
+      </button>
       <p className="menu-help">
         PC：WASDで移動、画面クリックでマウス視点、Escで解除。スマホ：左スティックで移動、右の空いている部分をスワイプして視点操作。
       </p>
       <details className="restart-section">
         <summary>最初からやり直す</summary>
         <p>
-          現在の冒険の進行がすべて失われます。この開発版はゲーム進行を保存しません。
+          冒険はこの端末へ自動保存されています。やり直すと、現在のレベル・領土・配下・建物・持ち物が失われます。
         </p>
         <button onClick={onRestart}>進行を消して職業選択へ戻る</button>
       </details>
@@ -212,6 +224,9 @@ export function AdventureHUD({
   onMap,
   onInventory,
   onRank,
+  mapKey,
+  inventoryKey,
+  viewYaw,
 }: {
   world: {
     hp: number;
@@ -232,12 +247,22 @@ export function AdventureHUD({
   onMap: () => void;
   onInventory: () => void;
   onRank: () => void;
+  mapKey: string;
+  inventoryKey: string;
+  viewYaw: number;
 }) {
+  // The world map points north toward decreasing Y; yaw zero faces +Y.
+  const heading = (((180 - (viewYaw * 180) / Math.PI) % 360) + 360) % 360;
   return (
     <>
       <div className={`adventure-vitals ${inCombat ? 'in-combat' : ''}`}>
+        <HudArt kind="status" />
         <div className="identity">
-          <button onClick={onRank} aria-label="魔族ランクと全身を確認">
+          <button
+            onClick={onRank}
+            aria-label="魔族ランクと全身を確認"
+            data-sovereign={rankName.length > 1}
+          >
             {rankName}
           </button>
           <span>
@@ -272,20 +297,50 @@ export function AdventureHUD({
             value={world.energy}
             aria-label="スタミナ"
           />
-          <b>{Math.ceil(world.energy)}</b>
+          <b>
+            {Math.ceil(world.energy)}
+            <small> / {world.maxEnergy}</small>
+          </b>
         </div>
+      </div>
+      <div
+        className="realm-compass"
+        aria-label={`方角 ${Math.round(heading)}度`}
+      >
+        <div className="compass-track">
+          {Array.from({ length: 8 }, (_, index) => {
+            const degrees = index * 45;
+            const offset = ((degrees - heading + 540) % 360) - 180;
+            if (Math.abs(offset) > 90) return null;
+            return (
+              <span
+                key={index}
+                className={index % 2 === 0 ? 'cardinal' : ''}
+                style={{ left: `${50 + offset / 1.8}%` }}
+              >
+                {['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][index]}
+              </span>
+            );
+          })}
+        </div>
+        <b aria-hidden="true">✦</b>
       </div>
       <nav className="adventure-nav" aria-label="ゲームメニュー">
         <button onClick={onMap} aria-label="世界地図を開く">
-          <Map />
+          <HudArt kind="nav" />
+          <HudIcon kind="map" />
           <span>地図</span>
+          <kbd>{mapKey}</kbd>
         </button>
         <button onClick={onInventory} aria-label="持ち物を開く">
-          <Backpack />
+          <HudArt kind="nav" />
+          <HudIcon kind="inventory" />
           <span>持ち物</span>
+          <kbd>{inventoryKey}</kbd>
         </button>
         <button onClick={onMenu} aria-label="冒険メニューを開く">
-          <Menu />
+          <HudArt kind="nav" />
+          <HudIcon kind="menu" />
           <span>メニュー</span>
           {world.skillPoints > 0 && (
             <i aria-label="使用可能なスキルポイントあり" />
@@ -293,7 +348,8 @@ export function AdventureHUD({
         </button>
       </nav>
       <div className={`adventure-location ${owner}`}>
-        <Castle />
+        <HudArt kind="notice" />
+        <HudIcon kind="castle" />
         <span>{regionName}</span>
         <b>
           {owner === 'enemy' ? '敵領土' : owner === 'own' ? '自領' : '未支配'}

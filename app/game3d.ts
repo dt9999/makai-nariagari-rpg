@@ -82,6 +82,7 @@ type RenderMob = {
   name: string;
   tier: number;
   boss?: boolean;
+  hero?: boolean;
   ally?: boolean;
   kind?: MonsterKind;
   variant?: number;
@@ -1700,9 +1701,11 @@ function buildRiggedMob(mob: RenderMob) {
       armored: 1.28,
       aberration: 1.08,
     },
-    scale = mob.boss
-      ? (2.75 + Math.min(mob.tier, 8) * 0.1) * kindScale[kind]
-      : tierScale * kindScale[kind],
+    scale = mob.hero
+      ? 2.65
+      : mob.boss
+        ? (2.75 + Math.min(mob.tier, 8) * 0.1) * kindScale[kind]
+        : tierScale * kindScale[kind],
     shapeScale = new THREE.Vector3(
       0.93 + (variant % 3) * 0.07,
       0.96 + ((variant + 2) % 3) * 0.055,
@@ -1720,30 +1723,40 @@ function buildRiggedMob(mob: RenderMob) {
       volcano: [0x732d25, 0x4f2926, 0x8b3d22],
       castle: [0x3b294f, 0x292e43, 0x4a263c],
     },
-    bodyColor = (palette[mob.home] || palette.ruins)[variant % 3],
+    bodyColor = mob.hero
+      ? 0xd8dce2
+      : (palette[mob.home] || palette.ruins)[variant % 3],
     baseMat = mob.ally
       ? mats.ally
-      : new THREE.MeshStandardMaterial({
-          color: bodyColor,
-          roughness:
-            kind === 'insect' || kind === 'armored' || kind === 'golem'
-              ? 0.38
-              : 0.76,
-          metalness: kind === 'armored' ? 0.65 : kind === 'golem' ? 0.15 : 0,
-        }),
-    accentMat = mob.ally
-      ? mats.gold
-      : new THREE.MeshStandardMaterial({
-          color: new THREE.Color(bodyColor).offsetHSL(
-            variant % 2 ? 0.08 : -0.07,
-            0.08,
-            variant % 3 === 0 ? 0.18 : -0.12,
-          ),
-          roughness: kind === 'insect' ? 0.3 : 0.7,
-          metalness: kind === 'insect' ? 0.28 : 0.04,
-        }),
-    glowColor =
-      mob.home === 'volcano'
+      : mob.hero
+        ? new THREE.MeshStandardMaterial({
+            color: 0xdce3e8,
+            roughness: 0.28,
+            metalness: 0.72,
+          })
+        : new THREE.MeshStandardMaterial({
+            color: bodyColor,
+            roughness:
+              kind === 'insect' || kind === 'armored' || kind === 'golem'
+                ? 0.38
+                : 0.76,
+            metalness: kind === 'armored' ? 0.65 : kind === 'golem' ? 0.15 : 0,
+          }),
+    accentMat =
+      mob.ally || mob.hero
+        ? mats.gold
+        : new THREE.MeshStandardMaterial({
+            color: new THREE.Color(bodyColor).offsetHSL(
+              variant % 2 ? 0.08 : -0.07,
+              0.08,
+              variant % 3 === 0 ? 0.18 : -0.12,
+            ),
+            roughness: kind === 'insect' ? 0.3 : 0.7,
+            metalness: kind === 'insect' ? 0.28 : 0.04,
+          }),
+    glowColor = mob.hero
+      ? 0xffdc82
+      : mob.home === 'volcano'
         ? 0xff4a16
         : mob.home === 'forest'
           ? 0x70e079
@@ -2095,7 +2108,9 @@ function buildRiggedMob(mob: RenderMob) {
     pelvis = new THREE.Group();
     pelvis.position.y = large ? 1.0 : 0.76;
     motion.add(pelvis);
-    const anatomyRank = Math.max(0, Math.min(7, mob.tier + (large ? 2 : 0)));
+    const anatomyRank = mob.hero
+      ? 2
+      : Math.max(0, Math.min(7, mob.tier + (large ? 2 : 0)));
     mesh(
       keepSharedAnatomy(demonPelvisGeometry(anatomyRank)),
       baseMat,
@@ -2195,7 +2210,7 @@ function buildRiggedMob(mob: RenderMob) {
       large ? 0.12 : 0.09,
       large ? 0.05 : 0.04,
     );
-    const hornSides = variant === 0 && !large ? [-1] : [-1, 1];
+    const hornSides = mob.hero ? [] : variant === 0 && !large ? [-1] : [-1, 1];
     for (const side of hornSides) {
       const horn = mesh(
         geo.cone,
@@ -2257,7 +2272,10 @@ function buildRiggedMob(mob: RenderMob) {
         [0, 0.34, 0],
         head,
       ).rotation.x = Math.PI / 2;
-      const blade = buildWeapon('berserker', 0xd84a3c);
+      const blade = buildWeapon(
+        mob.hero ? 'blade' : 'berserker',
+        mob.hero ? 0xffe9ad : 0xd84a3c,
+      );
       blade.position.set(0, -0.02, 0);
       arms[1].end.add(blade);
     }

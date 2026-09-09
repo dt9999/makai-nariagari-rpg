@@ -823,6 +823,28 @@
 .territory-challenge.ready span {
   color: #ffd983;
 }
+.hero-challenge {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid #5d506f;
+  border-radius: 7px;
+  background: #1a1722;
+  color: #d8cedf;
+}
+.hero-challenge svg { width: 20px; }
+.hero-challenge span { color: #a99eb2; font-size: 13px; }
+.hero-challenge.ready {
+  border-color: #f1d18b;
+  background: linear-gradient(135deg, #4a3c25, #201826);
+  color: #fff2ca;
+  box-shadow: inset 0 0 22px #ffd37c1f, 0 0 14px #e5b95a20;
+}
+.hero-challenge.ready span { color: #ffe093; }
 .immersive-shell .job-select {
   padding: max(30px, env(safe-area-inset-top))
     max(24px, env(safe-area-inset-right)) max(30px, env(safe-area-inset-bottom));

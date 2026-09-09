@@ -147,7 +147,7 @@ export function createDemonArm(
   materials: ArmMaterials,
 ): THREE.Group {
   const root = new THREE.Group();
-  root.name = side === 1 ? '右腕・関節のある握り手' : '左腕・詠唱する手';
+  root.name = side === 1 ? '右腕・ミトン型の握り手' : '左腕・ミトン型の手';
   const mirror = (point: Point): Point => [point[0] * side, point[1], point[2]];
   const loft = (stations: Station[], material: THREE.Material) => {
     const mesh = new THREE.Mesh(
@@ -190,85 +190,22 @@ export function createDemonArm(
     ],
     materials.leather,
   ).name = '袖口の革巻き';
+  // One continuous mitten silhouette: no separate fingers, nails or thumb.
+  // The handle crosses the centre of the closed glove and moves with the arm.
   loft(
     [
-      { at: [0.008, 0.108, -0.19], width: 0.04, depth: 0.034 },
-      { at: [0.008, 0.145, -0.212], width: 0.049, depth: 0.034 },
-      { at: [0.006, 0.181, -0.217], width: 0.045, depth: 0.029 },
-      { at: [0.005, 0.217, -0.22], width: 0.046, depth: 0.029 },
-      { at: [0.008, 0.247, -0.221], width: 0.045, depth: 0.027 },
-      { at: [0.012, 0.267, -0.223], width: 0.039, depth: 0.025 },
-      { at: [0.014, 0.276, -0.223], width: 0.025, depth: 0.017 },
+      { at: [0.008, 0.10, -0.186], width: 0.04, depth: 0.034 },
+      { at: [0.010, 0.13, -0.207], width: 0.045, depth: 0.039 },
+      { at: [0.015, 0.17, -0.242], width: 0.055, depth: 0.048 },
+      { at: [0.022, 0.21, -0.263], width: 0.061, depth: 0.051 },
+      { at: [0.022, 0.25, -0.263], width: 0.060, depth: 0.049 },
+      { at: [0.022, 0.275, -0.26], width: 0.049, depth: 0.040 },
+      { at: [0.022, 0.29, -0.257], width: 0.028, depth: 0.024 },
+      { at: [0.022, 0.295, -0.255], width: 0.006, depth: 0.006 },
     ],
-    materials.skin,
-  ).name = '掌・母指球・手根';
-
+    materials.leather,
+  ).name = '指を分けないミトン型の革手袋';
   const flex: THREE.Mesh[] = [];
-  for (let finger = 0; finger < 4; finger++) {
-    const y = 0.269 - finger * 0.033,
-      size = [1, 1.06, 0.99, 0.84][finger];
-    const closed: Point[] = [
-      [0.035, y, -0.217],
-      [0.063, y + 0.001, -0.237],
-      [0.061, y, -0.277],
-      [0.025, y - 0.002, -0.294],
-      [0.002, y - 0.004, -0.275],
-    ];
-    const open: Point[] = [
-      [0.035, y, -0.217],
-      [0.074, y + 0.001, -0.263],
-      [0.076, y, -0.305 - 0.025 * size],
-      [0.064, y - 0.003, -0.346 - 0.027 * size],
-      [0.05, y - 0.005, -0.36 - 0.029 * size],
-    ];
-    const mesh = morphSurface(
-      fleshCurve(open.map(mirror), 0.014 * size, 0.01 * size),
-      fleshCurve(closed.map(mirror), 0.014 * size, 0.01 * size),
-      materials.skin,
-    );
-    mesh.name = ['人差し指', '中指', '薬指', '小指'][finger];
-    root.add(mesh);
-    flex.push(mesh);
-    const nail = morphSurface(
-      fleshCurve(open.slice(-2).map(mirror), 0.009 * size, 0.0028, 5).map(
-        (s) => ({ ...s, depth: 0.002 }),
-      ),
-      fleshCurve(closed.slice(-2).map(mirror), 0.009 * size, 0.0028, 5).map(
-        (s) => ({ ...s, depth: 0.002 }),
-      ),
-      materials.keratin,
-    );
-    nail.name = '短い角質の爪';
-    root.add(nail);
-    flex.push(nail);
-  }
-  const thumbOpen: Point[] = [
-    [-0.024, 0.191, -0.214],
-    [-0.052, 0.216, -0.221],
-    [-0.078, 0.241, -0.234],
-    [-0.091, 0.258, -0.249],
-  ];
-  const thumbClosed: Point[] = [
-    [-0.024, 0.191, -0.214],
-    [-0.039, 0.221, -0.204],
-    [-0.016, 0.254, -0.208],
-    [0.023, 0.255, -0.227],
-  ];
-  const thumb = morphSurface(
-    fleshCurve(thumbOpen.map(mirror), 0.021, 0.012),
-    fleshCurve(thumbClosed.map(mirror), 0.021, 0.012),
-    materials.skin,
-  );
-  thumb.name = '対向する二関節の親指';
-  root.add(thumb);
-  flex.push(thumb);
-  const thumbNail = morphSurface(
-    fleshCurve(thumbOpen.slice(-2).map(mirror), 0.012, 0.004, 5),
-    fleshCurve(thumbClosed.slice(-2).map(mirror), 0.012, 0.004, 5),
-    materials.keratin,
-  );
-  root.add(thumbNail);
-  flex.push(thumbNail);
 
   // Wrist detail belongs to the continuous skin surface; separate thin tubes
   // intersected it and produced dotted self-shadow seams in first person.
