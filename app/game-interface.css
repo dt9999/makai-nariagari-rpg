@@ -226,6 +226,64 @@
 .immersive-shell .waypoint-hud small {
   font-size: 12px;
 }
+.boss-health {
+  position: absolute;
+  z-index: 7;
+  top: max(80px, calc(env(safe-area-inset-top) + 64px));
+  left: 50%;
+  width: min(420px, calc(100% - 420px));
+  min-width: 280px;
+  transform: translateX(-50%);
+  padding: 7px 12px 9px;
+  border: 1px solid #c86c77aa;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #210d15f2, #100b12e8);
+  box-shadow:
+    0 8px 22px #0008,
+    inset 0 0 18px #7c172522;
+  color: #fff0e9;
+  pointer-events: none;
+}
+.boss-health-heading {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 7px;
+}
+.boss-health-heading small {
+  color: #f0989f;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+.boss-health-heading b {
+  overflow: hidden;
+  font-size: 13px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.boss-health-heading span {
+  color: #e8c5c5;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.boss-health-meter {
+  height: 7px;
+  margin-top: 5px;
+  overflow: hidden;
+  border: 1px solid #60333a;
+  border-radius: 99px;
+  background: #09070a;
+}
+.boss-health-meter i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #9e263c, #ef6b78);
+  box-shadow: 0 0 10px #e3495b99;
+  transition: width 140ms ease-out;
+}
 .immersive-shell .combat-controls {
   bottom: max(20px, env(safe-area-inset-bottom));
   left: 50%;
@@ -866,6 +924,15 @@
   .immersive-shell .waypoint-hud small {
     font-size: 11px;
   }
+  .boss-health {
+    top: max(203px, calc(env(safe-area-inset-top) + 187px));
+    width: calc(100% - 24px);
+    min-width: 0;
+    padding: 6px 10px 8px;
+  }
+  .boss-health-heading b {
+    font-size: 12px;
+  }
   .immersive-shell .combat-controls {
     bottom: max(22px, env(safe-area-inset-bottom));
     right: max(12px, env(safe-area-inset-right));
@@ -1092,6 +1159,10 @@
   .immersive-shell .waypoint-hud {
     top: 14px;
     max-width: calc(100% - 400px);
+  }
+  .boss-health {
+    top: 68px;
+    width: min(360px, calc(100% - 420px));
   }
   .adventure-location {
     top: 109px;

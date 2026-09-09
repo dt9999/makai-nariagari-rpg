@@ -3130,22 +3130,22 @@ export default function Home() {
             ? `あと${Math.max(1, Math.ceil((trackedDistance - attackRange) * 0.018))}m近づく`
             : '',
     current = regionAt(hud.x, hud.y),
-    siegeStatus = territorySiegeStatus(
-      hud,
-      current,
-      hud.mobs.some((mob) => mob.boss && !mob.dead && mob.home === current.id),
+    activeBoss = hud.mobs.find(
+      (mob) => mob.boss && !mob.dead && mob.home === current.id,
     ),
+    siegeStatus = territorySiegeStatus(hud, current, !!activeBoss),
     recruitHint = nearestRecruit(hud, hud.mobs, 360),
     recruitReady = recruitHint && d(hud, recruitHint) < 120,
     interaction = nearbyInteraction(hud, hud.loot, hud.nodes),
     currentHazard = hazardAt(hud.x, hud.y),
     currentOwner = ownerOf(hud, current),
     inCombat =
-      (hud.respawnGrace || 0) <= 0 &&
-      !sitesIn(current.id).some(
-        (site) => site.kind === 'camp' && d(hud, site) < 190,
-      ) &&
-      hud.mobs.some((mob) => !mob.dead && !mob.ally && d(hud, mob) < 240),
+      !!activeBoss ||
+      ((hud.respawnGrace || 0) <= 0 &&
+        !sitesIn(current.id).some(
+          (site) => site.kind === 'camp' && d(hud, site) < 190,
+        ) &&
+        hud.mobs.some((mob) => !mob.dead && !mob.ally && d(hud, mob) < 240)),
     need = hud.lv * 34,
     ready = canRank(hud),
     milestoneGroups = currentJob ? milestonesFor(currentJob.id) : [],
@@ -3301,6 +3301,27 @@ export default function Home() {
               </small>
             </div>
           </div>
+        )}
+        {hud.job && activeBoss && (
+          <output
+            className="boss-health"
+            aria-label={`${activeBoss.name} 生命力 ${Math.max(0, Math.ceil(activeBoss.hp))} / ${activeBoss.max}`}
+          >
+            <div className="boss-health-heading">
+              <small>領土ボス</small>
+              <b>{activeBoss.name}</b>
+              <span>
+                {Math.max(0, Math.ceil(activeBoss.hp))} / {activeBoss.max}
+              </span>
+            </div>
+            <div className="boss-health-meter" aria-hidden="true">
+              <i
+                style={{
+                  width: `${Math.max(0, Math.min(100, (activeBoss.hp / activeBoss.max) * 100))}%`,
+                }}
+              />
+            </div>
+          </output>
         )}
         {hud.job && currentHazard && (
           <div
