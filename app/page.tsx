@@ -8,6 +8,7 @@ import {
   ChevronUp,
   Crosshair,
   Flame,
+  Footprints,
   Hammer,
   Lock,
   Map,
@@ -115,6 +116,11 @@ import {
   encounterPackRadius,
   type Waypoint,
 } from './world';
+import {
+  AUTO_RUN_STUCK_SECONDS,
+  nextAutoRunBlockedTime,
+  resolveTravelAxes,
+} from './travel';
 
 type Owner = 'unknown' | 'wild' | 'enemy' | 'own';
 type MonsterKind = MonsterMotionKind;
@@ -222,7 +228,8 @@ type BindingAction =
   | 'recruit'
   | 'gather'
   | 'inventory'
-  | 'map';
+  | 'map'
+  | 'autoRun';
 const DEFAULT_BINDINGS: Record<BindingAction, string> = {
   forward: 'w',
   back: 's',
@@ -238,6 +245,7 @@ const DEFAULT_BINDINGS: Record<BindingAction, string> = {
   gather: 'f',
   inventory: 'i',
   map: 'm',
+  autoRun: 'c',
 };
 const BINDING_LABELS: Record<BindingAction, string> = {
   forward: '前進',
@@ -254,6 +262,7 @@ const BINDING_LABELS: Record<BindingAction, string> = {
   gather: '調べる・拾う・採集',
   inventory: '持ち物',
   map: '地図',
+  autoRun: '自動前進',
 };
 const bindingName = (key: string) =>
   key === ' ' ? 'SPACE' : key.toUpperCase();
@@ -325,6 +334,7 @@ type World = {
   energy: number;
   maxEnergy: number;
   guarding: boolean;
+  autoRun: boolean;
   dodgeCd: number;
   dodgeTime: number;
   skillCd: number;
@@ -1242,6 +1252,7 @@ const fresh = (): World => ({
   energy: 100,
   maxEnergy: 100,
   guarding: false,
+  autoRun: false,
   dodgeCd: 0,
   dodgeTime: 0,
   skillCd: 0,
@@ -1503,6 +1514,7 @@ export default function Home() {
       stick.current = { x: 0, y: 0, on: false };
       lookTouch.current.id = -1;
       game.current.guarding = false;
+      game.current.autoRun = false;
       if (document.pointerLockElement) document.exitPointerLock();
     }
   }, [
@@ -2167,6 +2179,7 @@ export default function Home() {
   const updateJoystick = (event: React.PointerEvent<HTMLDivElement>) => {
     if (!touchInput.current) setTouchAim(true);
     touchInput.current = true;
+    game.current.autoRun = false;
     const rect = event.currentTarget.getBoundingClientRect();
     const x =
       (event.clientX - rect.left - rect.width / 2) / (rect.width * 0.42);
@@ -2178,6 +2191,15 @@ export default function Home() {
   const releaseJoystick = () => {
     joystickPointer.current = null;
     stick.current = { x: 0, y: 0, on: false };
+  };
+  const toggleAutoRun = () => {
+    const w = game.current;
+    if (!w.job) return say('先に職業を選択しよう。');
+    w.autoRun = !w.autoRun;
+    w.message = w.autoRun
+      ? '自動前進を開始。視点で進行方向を調整。後退・スティック・被弾で停止する。'
+      : '自動前進を停止した。';
+    sync();
   };
   useEffect(() => {
     const saved = localStorage.getItem('makai-key-bindings');
@@ -2254,6 +2276,13 @@ export default function Home() {
       if (menuOpenRef.current) return;
       keys.current[key] = true;
       const map = bindingsRef.current;
+      if (key === map.autoRun && !e.repeat) {
+        e.preventDefault();
+        keys.current[key] = false;
+        toggleAutoRun();
+        return;
+      }
+      if (key === map.back) game.current.autoRun = false;
       if (key === map.jump) {
         e.preventDefault();
         jump();
@@ -2340,6 +2369,7 @@ export default function Home() {
       stick.current = { x: 0, y: 0, on: false };
       lookTouch.current.id = -1;
       game.current.guarding = false;
+      game.current.autoRun = false;
     };
     const lockChanged = () => {
       setPointerLocked(document.pointerLockElement === c);
@@ -2400,7 +2430,8 @@ export default function Home() {
     const patrolClock = new PatrolClock();
     let last = performance.now(),
       frame = 0,
-      id = 0;
+      id = 0,
+      autoRunBlockedFor = 0;
     const loop = (now: number) => {
       if (!view) {
         last = now;
@@ -2430,16 +2461,14 @@ export default function Home() {
       w.worldTime += dt;
       const held = (action: BindingAction) =>
         !!keys.current[bindingsRef.current[action]];
-      const strafe =
-          (held('right') ? 1 : 0) -
-          (held('left') ? 1 : 0) +
-          (stick.current.on ? stick.current.x : 0),
-        forward =
-          (held('forward') ? 1 : 0) -
-          (held('back') ? 1 : 0) -
-          (stick.current.on ? stick.current.y : 0),
-        intent = Math.min(1, Math.hypot(strafe, forward)),
-        length = Math.hypot(strafe, forward) || 1,
+      const { strafe, forward, intent, length } = resolveTravelAxes({
+          autoRun: w.autoRun,
+          forward: held('forward'),
+          back: held('back'),
+          left: held('left'),
+          right: held('right'),
+          stick: stick.current,
+        }),
         directionX =
           Math.sin(w.viewYaw) * (forward / length) +
           Math.cos(w.viewYaw) * (strafe / length),
@@ -2455,6 +2484,7 @@ export default function Home() {
           : 0,
         sprinting =
           (held('sprint') ||
+            w.autoRun ||
             (stick.current.on &&
               Math.hypot(stick.current.x, stick.current.y) > 0.92)) &&
           intent > 0.2 &&
@@ -2484,13 +2514,26 @@ export default function Home() {
           w.height,
         ),
       );
-      recordTutorialMotion(w.tutorial, d(w, previousPosition), 0);
+      const travelled = d(w, previousPosition);
+      recordTutorialMotion(w.tutorial, travelled, 0);
+      autoRunBlockedFor = nextAutoRunBlockedTime(
+        w.autoRun,
+        travelled,
+        dt,
+        autoRunBlockedFor,
+      );
+      if (autoRunBlockedFor >= AUTO_RUN_STUCK_SECONDS) {
+        w.autoRun = false;
+        autoRunBlockedFor = 0;
+        w.message = '自動前進を停止。障害物を回り込んでから再開しよう。';
+      }
       w.respawnGrace = Math.max(0, (w.respawnGrace || 0) - dt);
       const environmentHarm = hazardDamage(w.x, w.y, w.height, w.worldTime, dt);
       if (environmentHarm > 0 && w.respawnGrace <= 0) {
         w.hp -= environmentHarm;
         w.hitAnim = 0.15;
         w.damageSource = undefined;
+        w.autoRun = false;
       }
       if (sprinting) w.energy = Math.max(0, w.energy - 17 * dt);
       if (!w.grounded) {
@@ -2956,6 +2999,7 @@ export default function Home() {
               w.hp -= harm;
               w.hitAnim = 0.34;
               w.damageSource = { x: m.x, y: m.y, name: m.name, remaining: 1.8 };
+              w.autoRun = false;
             }
           }
           m.attackAnim = Math.max(0, (m.attackAnim || 0) - dt);
@@ -2998,6 +3042,7 @@ export default function Home() {
           w.hp = w.maxHp;
           w.energy = w.maxEnergy;
           w.guarding = false;
+          w.autoRun = false;
           w.dodgeTime = 0;
           w.attackAnim = 0;
           w.attackKind = 'none';
@@ -4131,6 +4176,15 @@ export default function Home() {
             瘴気鉱 <b>{hud.ore}</b>
           </span>
         </div>
+        <button
+          className={`auto-run-button ${hud.autoRun ? 'active' : ''}`}
+          onClick={toggleAutoRun}
+          aria-pressed={hud.autoRun}
+        >
+          <Footprints />
+          <span>{hud.autoRun ? '自動移動を停止' : '自動前進'}</span>
+          <kbd>{bindingName(bindings.autoRun)}</kbd>
+        </button>
         <div
           className="joystick"
           role="group"
