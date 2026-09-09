@@ -1603,12 +1603,12 @@ function animateFirstPersonRig(
       rightArm.position.z -= release * 0.18;
       rig.rotation.x -= gather * 0.05;
     } else {
-      rightArm.position.x -= wind * 0.09 + strike * 0.1;
-      rightArm.position.y += (wind * 0.22 - strike * 0.16) * heavy;
-      rightArm.position.z += wind * 0.06 - strike * 0.18;
+      rightArm.position.x -= wind * 0.14 + strike * 0.14;
+      rightArm.position.y += (wind * 0.38 - strike * 0.12) * heavy;
+      rightArm.position.z += wind * 0.03 - strike * 0.1;
       // Pitch the arm and its mounted weapon together: overhead preparation,
       // downward cut through the reticle, then a smooth return to the stance.
-      rightArm.rotation.x += (0.65 * wind - 1.05 * strike) * heavy;
+      rightArm.rotation.x += (0.85 * wind - 1.18 * strike) * heavy;
       rightArm.rotation.y += 0.22 * (wind + strike);
       rightArm.rotation.z -= 0.08 * (wind + strike);
       leftArm.position.y -= strike * 0.04;

@@ -161,7 +161,7 @@ export function createDemonArm(
     return mesh;
   };
   const arm: Station[] = [
-    { at: [0.18, -2, 0.4], width: 0.115, depth: 0.095 },
+    { at: [0.18, -4, 1.2], width: 0.115, depth: 0.095 },
     { at: [0.13, -0.45, 0.14], width: 0.095, depth: 0.078 },
     { at: [0.115, -0.39, 0.12], width: 0.102, depth: 0.084 },
     { at: [0.085, -0.3, 0.073], width: 0.108, depth: 0.08 },
@@ -194,11 +194,11 @@ export function createDemonArm(
     [
       { at: [0.008, 0.108, -0.19], width: 0.04, depth: 0.034 },
       { at: [0.008, 0.145, -0.212], width: 0.049, depth: 0.034 },
-      { at: [0.009, 0.181, -0.217], width: 0.056, depth: 0.035 },
-      { at: [0.01, 0.217, -0.22], width: 0.057, depth: 0.031 },
-      { at: [0.012, 0.25, -0.221], width: 0.054, depth: 0.029 },
-      { at: [0.016, 0.272, -0.223], width: 0.048, depth: 0.027 },
-      { at: [0.017, 0.278, -0.223], width: 0.04, depth: 0.018 },
+      { at: [0.006, 0.181, -0.217], width: 0.045, depth: 0.029 },
+      { at: [0.005, 0.217, -0.22], width: 0.046, depth: 0.029 },
+      { at: [0.008, 0.247, -0.221], width: 0.045, depth: 0.027 },
+      { at: [0.012, 0.267, -0.223], width: 0.039, depth: 0.025 },
+      { at: [0.014, 0.276, -0.223], width: 0.025, depth: 0.017 },
     ],
     materials.skin,
   ).name = '掌・母指球・手根';
@@ -208,22 +208,22 @@ export function createDemonArm(
     const y = 0.269 - finger * 0.033,
       size = [1, 1.06, 0.99, 0.84][finger];
     const closed: Point[] = [
-      [0.046, y, -0.219],
-      [0.065, y + 0.002, -0.249],
-      [0.05, y, -0.287],
-      [0.017, y - 0.002, -0.291],
-      [-0.006, y - 0.004, -0.273],
+      [0.035, y, -0.217],
+      [0.063, y + 0.001, -0.237],
+      [0.061, y, -0.277],
+      [0.025, y - 0.002, -0.294],
+      [0.002, y - 0.004, -0.275],
     ];
     const open: Point[] = [
-      [0.046, y, -0.219],
+      [0.035, y, -0.217],
       [0.074, y + 0.001, -0.263],
       [0.076, y, -0.305 - 0.025 * size],
       [0.064, y - 0.003, -0.346 - 0.027 * size],
       [0.05, y - 0.005, -0.36 - 0.029 * size],
     ];
     const mesh = morphSurface(
-      fleshCurve(open.map(mirror), 0.017 * size, 0.0085 * size),
-      fleshCurve(closed.map(mirror), 0.017 * size, 0.0085 * size),
+      fleshCurve(open.map(mirror), 0.014 * size, 0.01 * size),
+      fleshCurve(closed.map(mirror), 0.014 * size, 0.01 * size),
       materials.skin,
     );
     mesh.name = ['人差し指', '中指', '薬指', '小指'][finger];
@@ -243,20 +243,20 @@ export function createDemonArm(
     flex.push(nail);
   }
   const thumbOpen: Point[] = [
-    [-0.035, 0.161, -0.207],
-    [-0.071, 0.183, -0.221],
-    [-0.107, 0.214, -0.247],
-    [-0.108, 0.241, -0.282],
+    [-0.024, 0.191, -0.214],
+    [-0.052, 0.216, -0.221],
+    [-0.078, 0.241, -0.234],
+    [-0.091, 0.258, -0.249],
   ];
   const thumbClosed: Point[] = [
-    [-0.035, 0.161, -0.207],
-    [-0.067, 0.194, -0.242],
-    [-0.057, 0.219, -0.282],
-    [-0.015, 0.23, -0.309],
+    [-0.024, 0.191, -0.214],
+    [-0.039, 0.221, -0.204],
+    [-0.016, 0.254, -0.208],
+    [0.023, 0.255, -0.227],
   ];
   const thumb = morphSurface(
-    fleshCurve(thumbOpen.map(mirror), 0.026, 0.013),
-    fleshCurve(thumbClosed.map(mirror), 0.026, 0.013),
+    fleshCurve(thumbOpen.map(mirror), 0.021, 0.012),
+    fleshCurve(thumbClosed.map(mirror), 0.021, 0.012),
     materials.skin,
   );
   thumb.name = '対向する二関節の親指';
