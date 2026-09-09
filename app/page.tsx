@@ -2470,10 +2470,10 @@ export default function Home() {
           stick: stick.current,
         }),
         directionX =
-          Math.sin(w.viewYaw) * (forward / length) +
+          Math.sin(w.viewYaw) * (forward / length) -
           Math.cos(w.viewYaw) * (strafe / length),
         directionY =
-          Math.cos(w.viewYaw) * (forward / length) -
+          Math.cos(w.viewYaw) * (forward / length) +
           Math.sin(w.viewYaw) * (strafe / length),
         j = jobOf(w),
         move = w.job

@@ -27,7 +27,13 @@ export function anatomicalLoft(stations: Station[], radial = 16) {
     colors: number[] = [],
     indices: number[] = [];
   const centers = stations.map((station) => new THREE.Vector3(...station.at));
-  const across = new THREE.Vector3(1, 0, 0);
+  // Transport the ring frame along the surface. Re-projecting world X at each
+  // station flips a curled finger's rings when its tangent crosses that axis.
+  const firstTangent = centers[1].clone().sub(centers[0]).normalize();
+  const across =
+    Math.abs(firstTangent.y) < 0.4
+      ? new THREE.Vector3(0, 1, 0)
+      : new THREE.Vector3(1, 0, 0);
   stations.forEach((station, ring) => {
     const tangent = centers[Math.min(ring + 1, centers.length - 1)]
       .clone()
@@ -40,6 +46,7 @@ export function anatomicalLoft(stations: Station[], radial = 16) {
     // A finger can point along X. Pick another perpendicular for that case.
     if (normal.lengthSq() < 0.1)
       normal.set(0, 1, 0).addScaledVector(tangent, -tangent.y).normalize();
+    across.copy(normal);
     const depth = tangent.clone().cross(normal).normalize();
     for (let side = 0; side <= radial; side++) {
       const angle = (side / radial) * Math.PI * 2;
@@ -80,6 +87,20 @@ export function anatomicalLoft(stations: Station[], radial = 16) {
   geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
+  // Keep end-ring lighting radial: cap normals otherwise create a dark band
+  // where the separately modelled palm meets the forearm.
+  const normals = geometry.getAttribute('normal');
+  for (const ring of [0, stations.length - 1]) {
+    for (let side = 0; side <= radial; side++) {
+      const index = ring * (radial + 1) + side;
+      const outward = new THREE.Vector3(
+        vertices[index * 3] - centers[ring].x,
+        vertices[index * 3 + 1] - centers[ring].y,
+        vertices[index * 3 + 2] - centers[ring].z,
+      ).normalize();
+      normals.setXYZ(index, outward.x, outward.y, outward.z);
+    }
+  }
   geometry.computeBoundingSphere();
   return geometry;
 }
@@ -97,7 +118,7 @@ function fleshCurve(
     const t = index / count;
     const taper = THREE.MathUtils.lerp(radius, tipRadius, t);
     // Small knuckle bulges and flexion creases are part of the same surface.
-    const joint = 1 + 0.08 * Math.cos(t * Math.PI * 6);
+    const joint = 1 + 0.025 * Math.cos(t * Math.PI * 6);
     return {
       at: curve.getPoint(t).toArray() as Point,
       width: taper * joint,
@@ -140,6 +161,7 @@ export function createDemonArm(
     return mesh;
   };
   const arm: Station[] = [
+    { at: [0.18, -2, 0.4], width: 0.115, depth: 0.095 },
     { at: [0.13, -0.45, 0.14], width: 0.095, depth: 0.078 },
     { at: [0.115, -0.39, 0.12], width: 0.102, depth: 0.084 },
     { at: [0.085, -0.3, 0.073], width: 0.108, depth: 0.08 },
@@ -148,12 +170,12 @@ export function createDemonArm(
     { at: [0.023, -0.035, -0.102], width: 0.061, depth: 0.051 },
     { at: [0.014, 0.037, -0.15], width: 0.047, depth: 0.041 },
     { at: [0.007, 0.1, -0.186], width: 0.04, depth: 0.034 },
-    { at: [0.004, 0.145, -0.209], width: 0.043, depth: 0.034 },
+    { at: [0.008, 0.108, -0.19], width: 0.04, depth: 0.034 },
   ];
   loft(arm, materials.skin).name = '肘から手首へ続く前腕';
   // A short, wrinkled sleeve leaves the narrowing forearm and wrist visible.
   loft(
-    arm.slice(0, 5).map((station, i) => ({
+    arm.slice(0, 6).map((station, i) => ({
       ...station,
       width: station.width + 0.007 + (i % 2) * 0.005,
       depth: station.depth + 0.008,
@@ -186,14 +208,14 @@ export function createDemonArm(
     const y = 0.269 - finger * 0.033,
       size = [1, 1.06, 0.99, 0.84][finger];
     const closed: Point[] = [
-      [0.043, y, -0.185],
-      [0.078, y + 0.003, -0.257],
-      [0.055, y, -0.293],
-      [0.012, y - 0.002, -0.299],
-      [-0.019, y - 0.004, -0.273],
+      [0.046, y, -0.219],
+      [0.065, y + 0.002, -0.249],
+      [0.05, y, -0.287],
+      [0.017, y - 0.002, -0.291],
+      [-0.006, y - 0.004, -0.273],
     ];
     const open: Point[] = [
-      [0.043, y, -0.185],
+      [0.046, y, -0.219],
       [0.074, y + 0.001, -0.263],
       [0.076, y, -0.305 - 0.025 * size],
       [0.064, y - 0.003, -0.346 - 0.027 * size],
@@ -208,8 +230,12 @@ export function createDemonArm(
     root.add(mesh);
     flex.push(mesh);
     const nail = morphSurface(
-      fleshCurve(open.slice(-2).map(mirror), 0.009 * size, 0.0028, 5),
-      fleshCurve(closed.slice(-2).map(mirror), 0.009 * size, 0.0028, 5),
+      fleshCurve(open.slice(-2).map(mirror), 0.009 * size, 0.0028, 5).map(
+        (s) => ({ ...s, depth: 0.002 }),
+      ),
+      fleshCurve(closed.slice(-2).map(mirror), 0.009 * size, 0.0028, 5).map(
+        (s) => ({ ...s, depth: 0.002 }),
+      ),
       materials.keratin,
     );
     nail.name = '短い角質の爪';
@@ -225,8 +251,8 @@ export function createDemonArm(
   const thumbClosed: Point[] = [
     [-0.035, 0.161, -0.207],
     [-0.067, 0.194, -0.242],
-    [-0.057, 0.241, -0.287],
-    [-0.005, 0.255, -0.3],
+    [-0.057, 0.219, -0.282],
+    [-0.015, 0.23, -0.309],
   ];
   const thumb = morphSurface(
     fleshCurve(thumbOpen.map(mirror), 0.026, 0.013),
@@ -244,24 +270,8 @@ export function createDemonArm(
   root.add(thumbNail);
   flex.push(thumbNail);
 
-  // Extensor tendons end at the wrist instead of looking like detached spikes.
-  for (let tendon = 0; tendon < 2; tendon++) {
-    const x = -0.016 + tendon * 0.033;
-    loft(
-      fleshCurve(
-        [
-          [x + 0.015, -0.04, -0.058],
-          [x + 0.012, 0.045, -0.104],
-          [x, 0.115, -0.155],
-          [x, 0.165, -0.183],
-        ],
-        0.0018,
-        0.0012,
-        9,
-      ),
-      materials.skin,
-    );
-  }
+  // Wrist detail belongs to the continuous skin surface; separate thin tubes
+  // intersected it and produced dotted self-shadow seams in first person.
   if (rank >= 1) {
     // A low keratin ridge follows the ulna: bodily evolution separate from armour.
     loft(
@@ -297,7 +307,7 @@ export function createDemonArm(
     }
   if (rank >= 3) {
     loft(
-      arm.slice(2, 6).map((station) => ({
+      arm.slice(3, 7).map((station) => ({
         ...station,
         width: station.width + 0.008,
         depth: station.depth + 0.009,
@@ -314,7 +324,9 @@ export function createDemonArm(
   root.add(buckle);
   root.traverse((child) => {
     if (child instanceof THREE.Mesh) {
-      child.castShadow = child.receiveShadow = true;
+      // Close-up anatomy keeps direct lighting, without coarse world shadow-map
+      // texels producing dotted seams on the fingers and wrist.
+      child.castShadow = child.receiveShadow = false;
       child.renderOrder = 20;
     }
   });

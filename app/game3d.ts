@@ -1525,20 +1525,23 @@ function animateFirstPersonRig(
     16,
     dt,
   );
-  data.gait += dt * (2.4 + speedScene * 4.3);
+  // A full left/right stride advances with distance, without phase jumps when
+  // speed changes. Airborne movement does not add footsteps.
+  data.gait +=
+    dt * Math.min(speedScene, 5) * 2.1 * (world.height > 0.05 ? 0 : 1);
   const locomotion = data.speedBlend as number,
     phase = data.gait as number,
     motion = world.preferences?.weaponMotion ?? 1,
-    bobX = Math.sin(phase) * 0.018 * locomotion * motion,
-    bobY = Math.abs(Math.cos(phase * 2)) * 0.016 * locomotion * motion;
+    bobX = Math.sin(phase) * 0.012 * locomotion * motion,
+    bobY = Math.cos(phase * 2) * 0.006 * locomotion * motion;
   rig.position.set(bobX, -bobY, 0);
   rig.rotation.set(0, 0, -bobX * 0.45);
   const breath = Math.sin(elapsed * 1.85) * 0.004 * motion;
-  leftArm.position.set(-0.27, -0.39 + breath, -0.55);
+  leftArm.position.set(-0.27, -0.46 + breath, -0.55);
   rightArm.position.set(0.3, -0.31 - breath * 0.6, -0.58);
   leftArm.rotation.set(0.08, 0.3, -0.12);
   rightArm.rotation.set(0, -0.22, 0.08);
-  weapon.rotation.set(-0.18, 0, -0.22);
+  weapon.rotation.set(-0.1, 0, 0);
   const guard = data.guardBlend as number;
   const working = world.buildAnim > 0 && !world.attackAnim && !world.guarding;
   const armed = data.armed as boolean;
@@ -1566,14 +1569,14 @@ function animateFirstPersonRig(
           ? 0.9
           : working
             ? 0.62
-            : 0.38,
+            : 0.75,
     dt,
   );
   weapon.visible = armed && !working;
   (data.hammer as THREE.Group).visible = working;
   rightArm.position.lerp(new THREE.Vector3(0.08, -0.18, -0.48), guard);
   rightArm.rotation.x -= guard * 0.45;
-  weapon.rotation.z += guard * 0.85;
+  rightArm.rotation.z += guard * 0.85;
   leftArm.position.lerp(new THREE.Vector3(-0.12, -0.16, -0.5), guard);
   let impact = 0;
   if (world.attackAnim > 0 && world.attackTotal > 0) {
@@ -1600,14 +1603,15 @@ function animateFirstPersonRig(
       rightArm.position.z -= release * 0.18;
       rig.rotation.x -= gather * 0.05;
     } else {
-      rightArm.position.x += wind * 0.18 - strike * 0.28;
-      rightArm.position.y += wind * 0.12 + strike * 0.08;
-      rightArm.position.z += wind * 0.13 - strike * 0.35;
-      rightArm.rotation.x += (-0.55 * wind + 0.86 * strike) * heavy;
-      rightArm.rotation.z += (-0.62 * wind + 0.74 * strike) * heavy;
-      weapon.rotation.z += (0.88 * wind - 1.25 * strike) * heavy;
-      weapon.rotation.x -= 0.35 * wind;
-      leftArm.position.z -= strike * 0.12;
+      rightArm.position.x -= wind * 0.09 + strike * 0.1;
+      rightArm.position.y += (wind * 0.22 - strike * 0.16) * heavy;
+      rightArm.position.z += wind * 0.06 - strike * 0.18;
+      // Pitch the arm and its mounted weapon together: overhead preparation,
+      // downward cut through the reticle, then a smooth return to the stance.
+      rightArm.rotation.x += (0.65 * wind - 1.05 * strike) * heavy;
+      rightArm.rotation.y += 0.22 * (wind + strike);
+      rightArm.rotation.z -= 0.08 * (wind + strike);
+      leftArm.position.y -= strike * 0.04;
     }
   }
   if (working) {
@@ -1633,7 +1637,7 @@ function animateFirstPersonRig(
     (1 - attackMotion) * (1 - guard),
   );
   leftArm.position.lerp(
-    new THREE.Vector3(-0.27, -0.39, -0.55),
+    new THREE.Vector3(-0.27, -0.46, -0.55),
     (1 - attackMotion) * (1 - guard),
   );
   rightArm.rotation.x *= attackMotion;
@@ -3582,12 +3586,12 @@ export function createGame3D(
     firstPersonRig.scale.setScalar(0.72 * Math.min(1, camera.aspect + 0.28));
     firstPersonRig.position.y -= 0.12;
     firstPersonRig.position.z = -0.45;
-    const locomotion = clamp01(playerSpeedScene / 3.8),
-      headBob =
-        Math.abs(Math.sin(elapsed * (5.2 + playerSpeedScene * 1.5))) *
-        0.025 *
-        locomotion *
-        preferences.cameraMotion;
+    const headBob =
+      Math.cos(firstPersonRig.userData.gait * 2) *
+      0.004 *
+      firstPersonRig.userData.speedBlend *
+      (world.height > 0.05 ? 0 : 1) *
+      preferences.cameraMotion;
     const groundHeight = terrainHeight(world.x, world.y);
     camera.position.set(px, groundHeight + 1.68 + world.height + headBob, pz);
     landscape.update(world.x, world.y, elapsed, profile.distance, world.bases);
@@ -3660,7 +3664,10 @@ export function createGame3D(
       Math.min(1, dt * 0.5),
     );
     camera.rotation.set(world.viewPitch, Math.PI + world.viewYaw, 0);
-    let cameraRoll = Math.sin(elapsed * 5.4) * 0.0025 * locomotion,
+    let cameraRoll =
+        Math.sin(firstPersonRig.userData.gait) *
+        0.0007 *
+        firstPersonRig.userData.speedBlend,
       cameraKick = 0;
     if (world.attackAnim > 0 && world.attackTotal > 0) {
       const progress = clamp01(1 - world.attackAnim / world.attackTotal);
