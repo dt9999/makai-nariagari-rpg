@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  AIM_GUIDANCE_RANGE,
   damageBearing,
   nearestRecruit,
   retreatHostilesAfterDefeat,
@@ -39,6 +40,29 @@ test('aim guidance explains the best forward threat when blocked', () => {
   assert.equal(cue.tracked, blocked);
   assert.equal(cue.clear, false);
   assert.equal(cue.distance, 80);
+});
+
+test('aim guidance reaches the camp guard ring without changing attack range', () => {
+  const guard = { id: 1, x: 0, y: AIM_GUIDANCE_RANGE - 1 };
+  const cue = selectAimCue(
+    { x: 0, y: 0, facingX: 0, facingY: 1 },
+    [guard],
+    100,
+    0.42,
+    () => true,
+  );
+  assert.equal(cue.tracked, guard);
+  assert.equal(cue.direct, undefined);
+  assert.equal(
+    selectAimCue(
+      { x: 0, y: 0, facingX: 0, facingY: 1 },
+      [{ id: 2, x: 0, y: AIM_GUIDANCE_RANGE + 1 }],
+      100,
+      0.42,
+      () => true,
+    ).tracked,
+    undefined,
+  );
 });
 
 test('recruit hints and actions select the same nearest eligible corpse within their exact range', () => {

@@ -20,6 +20,8 @@ export type AimCue<T extends AimTarget> = {
   clear: boolean;
 };
 
+export const AIM_GUIDANCE_RANGE = 820;
+
 /** Find the crosshair target and the best nearby guidance target in one pass. */
 export function selectAimCue<T extends AimTarget>(
   player: { x: number; y: number; facingX: number; facingY: number },
@@ -34,7 +36,7 @@ export function selectAimCue<T extends AimTarget>(
     trackedDistance = 0,
     trackedAlignment = -Infinity,
     trackedClear = false;
-  const trackingRange = Math.max(520, attackRange * 2.6);
+  const trackingRange = Math.max(AIM_GUIDANCE_RANGE, attackRange * 2.6);
 
   for (const mob of mobs) {
     if (mob.ally || mob.dead) continue;

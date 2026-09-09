@@ -30,6 +30,8 @@ import {
 } from './creature-motion';
 import { NearbyIndex, PatrolClock } from './simulation';
 import {
+  MAX_RECRUIT_REFUSALS,
+  RECRUIT_REFUSAL_BONUS,
   RECRUIT_WINDOW_SECONDS,
   recruitmentCohort,
   recruitmentChance,
@@ -338,6 +340,7 @@ type World = {
   selectedBuilding: BuildingKind;
   bases: BaseSite[];
   roster: MinionUnit[];
+  recruitRefusals: number;
   workClock: number;
   forgeProgress: number;
   researchProgress: number;
@@ -1267,6 +1270,7 @@ const fresh = (): World => ({
     },
   ],
   roster: [],
+  recruitRefusals: 0,
   workClock: 0,
   forgeProgress: 0,
   researchProgress: 0,
@@ -1869,6 +1873,7 @@ export default function Home() {
         target.tier,
         followers.length,
         w.stats.leadership,
+        w.recruitRefusals ?? 0,
       ),
       rawRoll =
         Math.sin(target.id * 12.9898 + w.kills * 7.233 + w.minions * 2.417) *
@@ -1876,7 +1881,11 @@ export default function Home() {
       roll = rawRoll - Math.floor(rawRoll);
     if (roll > chance) {
       target.recruitTime = 0;
-      w.message = `${target.name}は服従を拒み、瘴気へ還った。成功率 ${Math.round(chance * 100)}%。`;
+      w.recruitRefusals = Math.min(
+        MAX_RECRUIT_REFUSALS,
+        (w.recruitRefusals ?? 0) + 1,
+      );
+      w.message = `${target.name}は服従を拒み、瘴気へ還った。成功率 ${Math.round(chance * 100)}%。次回の服従圧 +${Math.round(w.recruitRefusals * RECRUIT_REFUSAL_BONUS * 100)}%。`;
       sync();
       return;
     }
@@ -1895,6 +1904,7 @@ export default function Home() {
         w.roster.push(minionFrom(mob, assignment));
     });
     w.minions = w.roster.length;
+    w.recruitRefusals = 0;
     completeLesson(w.tutorial, 'recruit');
     if (firstRecruitment && w.minions > 0) w.achievements++;
     w.message =

@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  MAX_RECRUIT_REFUSALS,
+  RECRUIT_REFUSAL_BONUS,
   RECRUIT_WINDOW_SECONDS,
   recruitmentCohort,
   recruitmentChance,
@@ -86,4 +88,20 @@ test('greater player strength and leadership improve success; stronger opponents
   assert.ok(recruitmentChance(100, 1, 0, 1) > recruitmentChance(100, 3, 0, 1));
   assert.ok(recruitmentChance(100, 2, 0, 1) > recruitmentChance(100, 2, 10, 1));
   assert.ok(recruitmentChance(100, 2, 3, 10) > recruitmentChance(100, 2, 3, 1));
+});
+
+test('successive refusals build bounded pressure without replacing the strength rules', () => {
+  const base = recruitmentChance(60, 2, 1, 2);
+  for (let refusals = 1; refusals <= MAX_RECRUIT_REFUSALS; refusals++)
+    assert.equal(
+      recruitmentChance(60, 2, 1, 2, refusals),
+      Math.min(0.96, base + refusals * RECRUIT_REFUSAL_BONUS),
+    );
+  assert.equal(
+    recruitmentChance(60, 2, 1, 2, 99),
+    recruitmentChance(60, 2, 1, 2, MAX_RECRUIT_REFUSALS),
+  );
+  assert.ok(
+    recruitmentChance(100, 1, 0, 2, 1) > recruitmentChance(60, 2, 1, 2, 1),
+  );
 });

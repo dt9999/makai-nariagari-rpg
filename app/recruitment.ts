@@ -8,6 +8,8 @@ type Candidate = {
 };
 
 export const RECRUIT_WINDOW_SECONDS = 24;
+export const RECRUIT_REFUSAL_BONUS = 0.12;
+export const MAX_RECRUIT_REFUSALS = 3;
 
 /** Preserve real command chains, including captains with their own squads. */
 export function recruitmentCohort<T extends Candidate>(
@@ -49,13 +51,18 @@ export function recruitmentChance(
   tier: number,
   followers: number,
   leadership: number,
+  refusals = 0,
 ) {
   const opposition = tier * 23 + followers * 5 + 12;
   return Math.max(
     0.08,
     Math.min(
       0.96,
-      0.38 + (playerMight - opposition) / 125 + leadership * 0.012,
+      0.38 +
+        (playerMight - opposition) / 125 +
+        leadership * 0.012 +
+        Math.min(MAX_RECRUIT_REFUSALS, Math.max(0, Math.floor(refusals))) *
+          RECRUIT_REFUSAL_BONUS,
     ),
   );
 }
