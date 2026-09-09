@@ -2,6 +2,12 @@ import * as THREE from 'three';
 import { sceneryBlocksTravel } from './travel-corridors';
 import { sceneryInsideBuilding, type StructureSite } from './structures';
 import { textureSurface, type RealmTextures } from './realm-textures';
+import { createSceneryGeometries } from './scenery-geometry';
+import {
+  sceneryProfile,
+  type SceneryMaterial,
+  type SceneryShape,
+} from './scenery';
 import {
   DISCOVERY_SITES,
   SCALE,
@@ -23,13 +29,15 @@ const random = (n: number) => {
 
 /** Bounded nearby scenery: instances share geometries/materials and unload outside the active ring. */
 export function createLandscape(scene: THREE.Scene, textures: RealmTextures) {
+  const regionalGeometry = createSceneryGeometries();
   const geometry = {
     box: new THREE.BoxGeometry(1, 1, 1),
     rock: new THREE.DodecahedronGeometry(1, 1),
     trunk: new THREE.CylinderGeometry(0.65, 1, 1, 7),
     cone: new THREE.ConeGeometry(1, 1, 7),
-    crystal: new THREE.OctahedronGeometry(1),
+    siteCrystal: new THREE.OctahedronGeometry(1),
     ring: new THREE.TorusGeometry(1, 0.12, 6, 24),
+    ...regionalGeometry,
   };
   const material = {
     stone: new THREE.MeshStandardMaterial({ color: 0x615967, roughness: 0.95 }),
@@ -61,6 +69,40 @@ export function createLandscape(scene: THREE.Scene, textures: RealmTextures) {
       emissive: 0xff5a17,
       emissiveIntensity: 2,
     }),
+    moss: new THREE.MeshStandardMaterial({
+      color: 0x596856,
+      roughness: 0.98,
+    }),
+    iron: new THREE.MeshStandardMaterial({
+      color: 0x555b64,
+      roughness: 0.42,
+      metalness: 0.72,
+    }),
+    ash: new THREE.MeshStandardMaterial({
+      color: 0x6c6676,
+      roughness: 0.96,
+    }),
+    bone: new THREE.MeshStandardMaterial({
+      color: 0xb3a68d,
+      roughness: 0.84,
+    }),
+    fungus: new THREE.MeshStandardMaterial({
+      color: 0x4c8379,
+      emissive: 0x163b3b,
+      emissiveIntensity: 0.75,
+      roughness: 0.72,
+    }),
+    lava: new THREE.MeshStandardMaterial({
+      color: 0xff7b39,
+      emissive: 0xff2e0a,
+      emissiveIntensity: 2.1,
+      roughness: 0.38,
+    }),
+    obsidian: new THREE.MeshStandardMaterial({
+      color: 0x302b36,
+      roughness: 0.6,
+      metalness: 0.18,
+    }),
   };
   const chunks = new Map<string, THREE.Group>(),
     sites = new Map<string, THREE.Group>(),
@@ -69,6 +111,10 @@ export function createLandscape(scene: THREE.Scene, textures: RealmTextures) {
   material.wood.color.set(0xc2b4a6);
   textureSurface(material.stone, textures.stone, 0.035);
   textureSurface(material.wood, textures.wood, 0.02);
+  textureSurface(material.moss, textures.stone, 0.03);
+  textureSurface(material.ash, textures.stone, 0.025);
+  textureSurface(material.iron, textures.stone, 0.015);
+  textureSurface(material.obsidian, textures.stone, 0.02);
   const put = (
     root: THREE.Object3D,
     shape: keyof typeof geometry,
@@ -188,7 +234,7 @@ export function createLandscape(scene: THREE.Scene, textures: RealmTextures) {
           );
         }
         if (z % 4 === 0)
-          put(root, 'crystal', 'magic', [0.3, 0.85, 0.3], [2.1, 0.85, z]);
+          put(root, 'siteCrystal', 'magic', [0.3, 0.85, 0.3], [2.1, 0.85, z]);
       }
       put(root, 'box', 'stone', [6, 0.12, 16], [0, 0.02, 7]);
     } else if (s.kind === 'quarry') {
@@ -204,7 +250,7 @@ export function createLandscape(scene: THREE.Scene, textures: RealmTextures) {
         );
         put(
           root,
-          'crystal',
+          'siteCrystal',
           'magic',
           [0.25 + random(i + 2) * 0.3, 1 + random(i + 4), 0.3],
           [Math.cos(a) * rad, 0.8, Math.sin(a) * rad],
@@ -254,7 +300,7 @@ export function createLandscape(scene: THREE.Scene, textures: RealmTextures) {
       put(root, 'box', 'stone', [7, 0.12, 8], [0, 0.06, 3]);
     } else if (s.kind === 'shrine') {
       put(root, 'trunk', 'stone', [2.5, 0.3, 2.5], [0, 0.15, 0]);
-      put(root, 'crystal', 'magic', [0.7, 1.8, 0.7], [0, 2.2, 0]);
+      put(root, 'siteCrystal', 'magic', [0.7, 1.8, 0.7], [0, 2.2, 0]);
       const ring = put(root, 'ring', 'gold', [2, 2, 2], [0, 2.2, 0]);
       ring.rotation.x = 0.5;
       root.userData.ring = ring;
@@ -274,7 +320,7 @@ export function createLandscape(scene: THREE.Scene, textures: RealmTextures) {
       for (let i = 0; i < 10; i++)
         put(
           root,
-          'crystal',
+          'siteCrystal',
           'magic',
           [0.12, 0.3, 0.12],
           [(random(i) - 0.5) * 8, 0.3, (random(i + 60) - 0.5) * 8],
@@ -288,55 +334,82 @@ export function createLandscape(scene: THREE.Scene, textures: RealmTextures) {
       x0 = cx * 800,
       y0 = cy * 800;
     const r = regionAt(x0 + 400, y0 + 400),
-      forest = r.biome === '森',
-      cave = r.biome === '洞窟';
-    const count = forest ? 42 : 18;
-    const rocks = new THREE.InstancedMesh(geometry.rock, material.stone, count);
-    const stems = new THREE.InstancedMesh(
-      geometry.trunk,
-      material.wood,
-      forest ? count : 6,
-    );
-    const crowns = new THREE.InstancedMesh(
-      cave ? geometry.rock : geometry.cone,
-      cave ? material.magic : material.leaf,
-      forest ? count : 6,
-    );
+      profile = sceneryProfile(r.biome),
+      count = profile.count,
+      accentCount = Math.max(1, Math.round(count * profile.accentRatio)),
+      primary = new THREE.InstancedMesh(
+        geometry[profile.primary as SceneryShape],
+        material[profile.primaryMaterial as SceneryMaterial],
+        count,
+      ),
+      accents = new THREE.InstancedMesh(
+        geometry[profile.accent as SceneryShape],
+        material[profile.accentMaterial as SceneryMaterial],
+        accentCount,
+      );
     for (let i = 0; i < count; i++) {
       const seed = cx * 937 + cy * 571 + i * 23,
         x = x0 + random(seed) * 800,
         y = y0 + random(seed + 9) * 800,
-        h = terrainHeight(x, y);
-      const propRadius = (0.35 + random(seed + 7) * 1.4) / SCALE;
+        h = terrainHeight(x, y),
+        height =
+          profile.minHeight +
+          random(seed + 19) * (profile.maxHeight - profile.minHeight),
+        widthRatio =
+          profile.primary === 'fence'
+            ? 0.52
+            : profile.primary === 'fungus'
+              ? 0.4
+              : profile.primary === 'ruin' || profile.primary === 'palisade'
+                ? 0.32
+                : 0.23,
+        width = height * widthRatio,
+        propRadius = (width * 0.72) / SCALE;
       const inSite =
         sceneryInsideBuilding({ x, y }, buildings) ||
         sceneryBlocksTravel({ x, y }, propRadius + 20);
-      const s = inSite ? 0.001 : 0.35 + random(seed + 7) * 1.4;
-      dummy.position.set(worldX(x), h + s * 0.35, worldZ(y));
-      dummy.scale.set(s, s * 0.65, s * 0.8);
-      dummy.rotation.set(0.1, random(seed + 4) * 6, 0.15);
+      const visible = inSite ? 0.001 : 1,
+        rise = profile.raised ? 0.65 + random(seed + 28) * 1.25 : 0;
+      dummy.position.set(worldX(x), h + rise, worldZ(y));
+      dummy.scale.set(width * visible, height * visible, width * visible);
+      dummy.rotation.set(0, random(seed + 4) * Math.PI * 2, 0);
       dummy.updateMatrix();
-      rocks.setMatrixAt(i, dummy.matrix);
-      if (i < stems.count) {
-        const tall = forest ? 5 + random(seed + 19) * 7 : cave ? 2 : 3;
-        dummy.position.set(worldX(x + 20), h + tall / 2, worldZ(y));
-        dummy.rotation.set(0, random(seed + 5) * 6, 0.03);
-        dummy.scale.set(inSite ? 0.001 : 0.25, tall, inSite ? 0.001 : 0.25);
-        dummy.updateMatrix();
-        stems.setMatrixAt(i, dummy.matrix);
-        dummy.position.y = h + tall;
-        dummy.scale.set(
-          inSite ? 0.001 : tall * 0.3,
-          tall * 0.65,
-          inSite ? 0.001 : tall * 0.3,
+      primary.setMatrixAt(i, dummy.matrix);
+      if (i < accentCount) {
+        const paired =
+            profile.family === 'gnarled-grove' ||
+            profile.family === 'settlement-fence' ||
+            profile.family === 'basalt-vents',
+          accentX = paired ? x : x + (random(seed + 31) - 0.5) * 150,
+          accentY = paired ? y : y + (random(seed + 37) - 0.5) * 150,
+          accentHeight = paired
+            ? height
+            : height * (0.32 + random(seed + 41) * 0.24),
+          accentWidth = paired ? width : accentHeight * 0.34,
+          accentRadius = (accentWidth * 0.72) / SCALE,
+          accentBlocked =
+            sceneryInsideBuilding({ x: accentX, y: accentY }, buildings) ||
+            sceneryBlocksTravel({ x: accentX, y: accentY }, accentRadius + 20),
+          accentVisible = accentBlocked ? 0.001 : 1;
+        dummy.position.set(
+          worldX(accentX),
+          terrainHeight(accentX, accentY) + rise,
+          worldZ(accentY),
         );
+        dummy.scale.set(
+          accentWidth * accentVisible,
+          accentHeight * accentVisible,
+          accentWidth * accentVisible,
+        );
+        dummy.rotation.set(0, random(seed + 43) * Math.PI * 2, 0);
         dummy.updateMatrix();
-        crowns.setMatrixAt(i, dummy.matrix);
+        accents.setMatrixAt(i, dummy.matrix);
       }
     }
-    for (const inst of [rocks, stems, crowns]) {
+    root.userData.sceneryFamily = profile.family;
+    for (const inst of [primary, accents]) {
       inst.receiveShadow = true;
-      inst.castShadow = forest;
+      inst.castShadow = r.biome === '森' || r.biome === '城';
       inst.computeBoundingSphere();
       root.add(inst);
     }
