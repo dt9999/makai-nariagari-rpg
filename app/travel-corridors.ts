@@ -1,4 +1,5 @@
 import {
+  CAMP_CLEARING_RADIUS,
   REGIONS,
   sitesIn,
   headquartersOf,
@@ -38,7 +39,7 @@ function segmentDistance(point: Point, start: Point, end: Point) {
 export function sceneryBlocksTravel(point: Point, radius = 0) {
   const region = regionAt(point.x, point.y);
   for (const site of sitesIn(region.id)) {
-    const clearing = site.kind === 'camp' ? 510 : 260;
+    const clearing = site.kind === 'camp' ? CAMP_CLEARING_RADIUS : 260;
     if (Math.hypot(point.x - site.x, point.y - site.y) < clearing + radius)
       return true;
   }

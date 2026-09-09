@@ -4,6 +4,8 @@ export const WORLD_HEIGHT = 18000;
 export const REGION_W = 6400;
 export const REGION_H = 9000;
 export const SCALE = 0.018;
+/** Includes the outer guard ring so camp enemies and first construction sites stay readable. */
+export const CAMP_CLEARING_RADIUS = 820;
 export const worldX = (x: number) => (x - WORLD_WIDTH / 2) * SCALE;
 export const worldZ = (y: number) => (y - WORLD_HEIGHT / 2) * SCALE;
 export type Region = {
@@ -588,7 +590,11 @@ export function terrainHeight(x: number, y: number): number {
         ? Math.hypot(dx, dy - Math.max(0, Math.min(14 / SCALE, dy)))
         : Math.hypot(dx, dy);
     const flatRadius =
-      site.kind === 'camp' ? 510 : site.kind === 'cave' ? 180 : 120;
+      site.kind === 'camp'
+        ? CAMP_CLEARING_RADIUS
+        : site.kind === 'cave'
+          ? 180
+          : 120;
     if (distance < flatRadius + 120) {
       const t = Math.max(0, Math.min(1, (distance - flatRadius) / 120));
       const blend = t * t * (3 - 2 * t);

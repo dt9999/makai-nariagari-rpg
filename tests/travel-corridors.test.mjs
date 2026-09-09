@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { REGIONS, sitesIn } from '../app/world.ts';
+import {
+  CAMP_CLEARING_RADIUS,
+  REGIONS,
+  encounterPackRadius,
+  sitesIn,
+} from '../app/world.ts';
 import {
   sceneryBlocksTravel,
   territoryRoute,
@@ -23,10 +28,15 @@ test('every map route has a continuous decoration-free corridor through its thre
     for (let i = 0; i < 24; i++)
       assert.equal(
         sceneryBlocksTravel({
-          x: camp.x + 500 * Math.cos(i),
-          y: camp.y + 500 * Math.sin(i),
+          x: camp.x + (CAMP_CLEARING_RADIUS - 20) * Math.cos(i),
+          y: camp.y + (CAMP_CLEARING_RADIUS - 20) * Math.sin(i),
         }),
         true,
+      );
+    for (let member = 0; member < 4; member++)
+      assert.ok(
+        encounterPackRadius('camp', member) + 70 < CAMP_CLEARING_RADIUS,
+        `${region.id} guard ${member} has clear silhouette space`,
       );
   }
 });
