@@ -8,7 +8,6 @@ import {
   ChevronUp,
   Crosshair,
   Flame,
-  Footprints,
   Hammer,
   Lock,
   Map,
@@ -22,8 +21,6 @@ import {
   Swords,
   Trophy,
   Users,
-  Wind,
-  Zap,
 } from 'lucide-react';
 import {
   creatureAttackImpactProgress,
@@ -1425,6 +1422,7 @@ export default function Home() {
     [inventoryOpen, setInventoryOpen] = useState(false),
     [adventureOpen, setAdventureOpen] = useState(false),
     [guideOpen, setGuideOpen] = useState(false),
+    [endingOpen, setEndingOpen] = useState(false),
     [renderPerformance, setRenderPerformance] =
       useState<RenderPerformance | null>(null),
     [pointerLocked, setPointerLocked] = useState(false),
@@ -1551,7 +1549,8 @@ export default function Home() {
       buildMenuOpen ||
       inventoryOpen ||
       adventureOpen ||
-      guideOpen;
+      guideOpen ||
+      endingOpen;
     if (
       inventoryOpen &&
       game.current.job &&
@@ -1577,6 +1576,7 @@ export default function Home() {
     inventoryOpen,
     adventureOpen,
     guideOpen,
+    endingOpen,
     sync,
   ]);
   const openScreen = (screen: GameScreen) => {
@@ -1753,6 +1753,7 @@ export default function Home() {
       w.bannerTime = 5;
       w.message =
         '暁断の勇者レオニスを撃破！ 最弱の魔族は、魔界を守る真の魔王となった。';
+      setEndingOpen(true);
     } else if (t.boss) {
       gain(80 + t.tier * 20);
       w.bossKills++;
@@ -3271,7 +3272,7 @@ export default function Home() {
             '--touch-inset': `${hud.preferences?.touchInset ?? 12}px`,
           } as React.CSSProperties
         }
-        className={`game-frame open-world ${hud.job ? 'playing' : 'choosing'} ${mapOpen || rankOpen || growthOpen || transferOpen || controlsOpen || minionOpen || buildMenuOpen || inventoryOpen || adventureOpen || guideOpen ? 'menu-visible' : ''}`}
+        className={`game-frame open-world ${hud.job ? 'playing' : 'choosing'} ${mapOpen || rankOpen || growthOpen || transferOpen || controlsOpen || minionOpen || buildMenuOpen || inventoryOpen || adventureOpen || guideOpen || endingOpen ? 'menu-visible' : ''}`}
       >
         <div className="hud-guidance">
           {hud.job &&
@@ -3303,6 +3304,54 @@ export default function Home() {
               sync();
             }}
           />
+        )}
+        {endingOpen && hud.heroDefeated && (
+          <GamePanel
+            title="魔界統一"
+            className="ending-panel"
+            onClose={() => setEndingOpen(false)}
+          >
+            <div className="ending-emblem" aria-hidden="true">
+              <Trophy />
+              <b>魔王</b>
+            </div>
+            <span className="ending-kicker">THE DEMON KING ASCENDS</span>
+            <h2>最弱の魔族は、魔界を守る王となった</h2>
+            <p>
+              暁断の勇者レオニスは倒れた。小さな隠れ家から始まった勢力は、配下と領土と魔王城を築き、ついに魔界の頂点へ到達した。
+            </p>
+            <div className="ending-record">
+              <span>
+                <Skull />
+                敵撃破 <b>{hud.kills}</b>
+              </span>
+              <span>
+                <Castle />
+                領土 <b>{hud.lands}</b>
+              </span>
+              <span>
+                <Users />
+                配下 <b>{hud.minions}</b>
+              </span>
+              <span>
+                <Sparkles />
+                実績 <b>{hud.achievements}</b>
+              </span>
+            </div>
+            <div className="ending-actions">
+              <button
+                onClick={() => {
+                  setEndingOpen(false);
+                  setRankOpen(true);
+                }}
+              >
+                魔王の全身を見る
+              </button>
+              <button className="primary" onClick={() => setEndingOpen(false)}>
+                魔界の探索を続ける
+              </button>
+            </div>
+          </GamePanel>
         )}
         {hud.job && (
           <AdventureHUD
@@ -3349,7 +3398,8 @@ export default function Home() {
             }}
             onHero={() => {
               setAdventureOpen(false);
-              challengeHero();
+              if (hud.heroDefeated) setEndingOpen(true);
+              else challengeHero();
             }}
             onRestart={() => {
               const preferences = game.current.preferences;
