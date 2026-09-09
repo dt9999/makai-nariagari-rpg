@@ -119,12 +119,16 @@ export function AdventureMenu({
   onSelect,
   onRestart,
   onRaid,
+  raidStatus,
+  raidReady,
   stats,
 }: {
   onClose: () => void;
   onSelect: (screen: GameScreen) => void;
   onRestart: () => void;
   onRaid: () => void;
+  raidStatus: string;
+  raidReady: boolean;
   stats: {
     wood: number;
     ore: number;
@@ -177,8 +181,11 @@ export function AdventureMenu({
           </button>
         ))}
       </nav>
-      <button className="territory-challenge" onClick={onRaid}>
-        <Castle /> 領主に挑戦 <span>本拠地の近くで領土戦を開始</span>
+      <button
+        className={`territory-challenge ${raidReady ? 'ready' : ''}`}
+        onClick={onRaid}
+      >
+        <Castle /> 領主に挑戦 <span>{raidStatus}</span>
       </button>
       <p className="menu-help">
         PC：WASDで移動、画面クリックでマウス視点、Escで解除。スマホ：左スティックで移動、右の空いている部分をスワイプして視点操作。

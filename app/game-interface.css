@@ -726,6 +726,14 @@
   font-size: 13px;
   color: #cbb7b5;
 }
+.territory-challenge.ready {
+  border-color: #e3b961;
+  background: linear-gradient(135deg, #4b3033, #42351f);
+  box-shadow: inset 0 0 18px #e3b96118;
+}
+.territory-challenge.ready span {
+  color: #ffd983;
+}
 .immersive-shell .job-select {
   padding: max(30px, env(safe-area-inset-top))
     max(24px, env(safe-area-inset-right)) max(30px, env(safe-area-inset-bottom));

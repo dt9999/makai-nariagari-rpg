@@ -48,6 +48,7 @@ import {
   territoryOwner,
   conquerTerritory,
   territoryBossId,
+  territorySiegeStatus,
 } from './territories';
 import { InventoryPanel } from './inventory-panel';
 import { RealmMap } from './realm-map';
@@ -2121,18 +2122,11 @@ export default function Home() {
   const raid = () => {
     let w = game.current,
       r = regionAt(w.x, w.y);
-    if (ownerOf(w, r) !== 'enemy')
-      return say('敵領土のランドマーク付近で領土ボスを呼び出せる。');
-    const headquarters = headquartersOf(r);
-    if (d(w, headquarters) > 620)
-      return say(
-        '領主の本拠地はまだ遠い。敵領土を偵察し、巨大建造物を目指そう。',
-      );
-    if (w.mobs.some((m) => m.boss && !m.dead && m.home === r.id))
-      return say('この領土の支配者はすでに出現している。');
-    let required = Math.max(2, REGIONS.indexOf(r) - 1);
-    if (w.lv < required)
-      return say('この領土の瘴気は強すぎる。推奨Lv.' + required + '。');
+    const activeBoss = w.mobs.some((m) => m.boss && !m.dead && m.home === r.id),
+      siege = territorySiegeStatus(w, r, activeBoss);
+    if (!siege.canStart) return say(siege.message);
+    const headquarters = headquartersOf(r),
+      required = siege.requiredLevel;
     const lord = TERRITORY_LORDS[r.id] || {
       name: r.name + 'の異形領主',
       kind: 'aberration' as MonsterKind,
@@ -3091,6 +3085,11 @@ export default function Home() {
             ? `あと${Math.max(1, Math.ceil((trackedDistance - attackRange) * 0.018))}m近づく`
             : '',
     current = regionAt(hud.x, hud.y),
+    siegeStatus = territorySiegeStatus(
+      hud,
+      current,
+      hud.mobs.some((mob) => mob.boss && !mob.dead && mob.home === current.id),
+    ),
     recruitHint = nearestRecruit(hud, hud.mobs, 360),
     recruitReady = recruitHint && d(hud, recruitHint) < 120,
     interaction = nearbyInteraction(hud, hud.loot, hud.nodes),
@@ -3189,6 +3188,8 @@ export default function Home() {
         {adventureOpen && (
           <AdventureMenu
             stats={hud}
+            raidStatus={siegeStatus.label}
+            raidReady={siegeStatus.canStart}
             onClose={() => setAdventureOpen(false)}
             onSelect={openScreen}
             onRaid={() => {
