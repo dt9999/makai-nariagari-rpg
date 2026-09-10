@@ -15,12 +15,20 @@
   filter: none;
   overflow: hidden;
 }
-.immersive-shell .hud-art > g > svg { width: 100%; height: 100%; }
-.adventure-vitals, .identity button, .adventure-nav button,
-.adventure-location, .immersive-shell .tutorial-hint,
+.immersive-shell .hud-art > g > svg {
+  width: 100%;
+  height: 100%;
+}
+.adventure-vitals,
+.identity button,
+.adventure-nav button,
+.adventure-location,
+.immersive-shell .tutorial-hint,
 .immersive-shell .combat-controls .action,
-.immersive-shell .utility-controls button, .immersive-shell .auto-run-button,
-.immersive-shell .notice, .immersive-shell .aim-target {
+.immersive-shell .utility-controls button,
+.immersive-shell .auto-run-button,
+.immersive-shell .notice,
+.immersive-shell .aim-target {
   isolation: isolate;
   border: 0;
   background: transparent;
@@ -35,177 +43,805 @@
   font-size: 16px;
   filter: drop-shadow(0 5px 12px #0008);
 }
-.identity { min-height: 27px; gap: 8px; border-bottom: 1px solid #b79a5d66; padding-bottom: 6px; }
+.identity {
+  min-height: 27px;
+  gap: 8px;
+  border-bottom: 1px solid #b79a5d66;
+  padding-bottom: 6px;
+}
 .identity button {
   position: absolute;
   left: 5px;
   top: -5px;
   width: 106px;
   height: 140px;
-  font: 700 46px Georgia, 'Yu Mincho', serif;
+  font:
+    700 46px Georgia,
+    'Yu Mincho',
+    serif;
   color: #ffe1a1;
-  text-shadow: 0 2px 3px #000, 0 0 18px #ddb57135;
+  text-shadow:
+    0 2px 3px #000,
+    0 0 18px #ddb57135;
 }
-.identity button:has(.hud-art) { padding: 0 12px 5px; }
-.identity button[data-sovereign='true'] { font-size: 27px; }
-.identity span { white-space: nowrap; font-size: 15px; }
-.identity b { margin-left: 8px; font-family: 'Yu Mincho', 'Hiragino Mincho ProN', serif; font-weight: 600; }
-.identity em { position: absolute; right: 26px; top: -3px; padding: 2px 6px; background: #371820; border: 1px solid #b25956; border-radius: 3px; font-size: 11px; }
-.vital-row { height: 19px; gap: 7px; margin-top: 5px; }
-.vital-row > span { font-size: 13px; width: 20px; }
-.vital-row > b { font-size: 13px; min-width: 68px; font-weight: 500; }
-.vital-row small { font-size: 12px; }
-.vital-row meter { height: 12px; border: 1px solid #9c666b; border-radius: 2px; box-shadow: 0 0 0 2px #02090e, 0 0 0 3px #72808a55; }
-.vital-row meter::-webkit-meter-bar { background: #110d13; }
-.vital-row meter::-webkit-meter-optimum-value { background: linear-gradient(#f05261, #b82039 55%, #e64351); box-shadow: inset 0 1px #ffb0af; }
-.vital-row meter::-moz-meter-bar { background: linear-gradient(#f05261, #b82039); }
-.vital-row.stamina meter { border-color: #68dbe6; }
-.vital-row.stamina meter::-webkit-meter-optimum-value { background: linear-gradient(#26d5e0, #048799 60%, #19c4d1); box-shadow: inset 0 1px #a2faff; }
-.vital-row.stamina meter::-moz-meter-bar { background: #09b9ce; }
-.adventure-vitals.in-combat { filter: drop-shadow(0 0 10px #b93b3b66); }
-.adventure-location { top: 157px; left: var(--hud-edge); width: clamp(350px, 28vw, 455px); min-height: 47px; padding: 10px 25px; gap: 12px; font-size: 14px; }
-.adventure-location > svg:not(.hud-art) { width: 23px; height: 23px; color: var(--hud-gold); flex-shrink: 0; }
-.adventure-location > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.adventure-location b { margin-left: auto; background: #123c36; border: 1px solid #65948755; font-weight: 500; }
-.adventure-location.enemy b { color: #ffcbc5; background: #5f1728; box-shadow: 0 0 18px #e4313830; border-color: #ef7e7855; }
-.adventure-nav { gap: 8px; }
-.adventure-nav button { width: clamp(76px, 6.5vw, 100px); height: clamp(86px, 7.4vw, 114px); padding: 12px 5px; gap: 5px; font-size: 14px; transition: filter .15s, transform .15s; }
-.adventure-nav svg:not(.hud-art) { width: 27px; height: 27px; color: var(--hud-gold); stroke-width: 1.5; }
-.adventure-nav kbd, .immersive-shell .combat-controls kbd, .immersive-shell .utility-controls kbd, .immersive-shell .auto-run-button kbd { border: 1px solid #84959f99; border-radius: 3px; background: #08111bdd; padding: 1px 5px; color: #c5d2dc; opacity: 1; font: 12px/1.4 Arial, sans-serif; }
-.adventure-nav button:hover { filter: brightness(1.3); transform: translateY(-2px); }
-.realm-compass { position: absolute; z-index: 6; top: max(30px, env(safe-area-inset-top)); left: 51%; width: clamp(180px, 24vw, 400px); transform: translateX(-50%); height: 40px; color: #c8bdac; pointer-events: none; mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); }
-.compass-track { height: 1px; margin-top: 8px; background: linear-gradient(90deg, transparent, #bfa577, transparent); position: relative; }
-.compass-track span { position: absolute; top: 10px; transform: translateX(-50%); font: 10px Georgia, serif; color: #938d87; }
-.compass-track span:before { content: ''; position: absolute; bottom: 17px; left: 50%; height: 7px; border-left: 1px solid #ae9672; }
-.compass-track .cardinal { font-size: 13px; color: #e4d8bc; }
-.realm-compass > b { position: absolute; top: -5px; left: 50%; transform: translateX(-50%); color: #ffdfa2; text-shadow: 0 0 12px #ffbc5c; font-size: 25px; }
-.immersive-shell .waypoint-hud { top: 76px; }
-.immersive-shell .tutorial-hint { top: 128px; width: min(350px, 29vw); padding: 13px 16px; min-height: 112px; filter: drop-shadow(0 4px 10px #0008); }
-.immersive-shell .tutorial-next { padding: 6px 4px; gap: 12px; }
-.immersive-shell .tutorial-next > svg { color: var(--hud-gold); flex-shrink: 0; width: 24px; }
-.immersive-shell .tutorial-next b { font: 600 18px/1.55 'Yu Mincho', serif; color: #fff6e7; }
-.immersive-shell .tutorial-next small { font-size: 12px; letter-spacing: .03em; }
-.tutorial-description { display: block; margin-top: 8px; padding-top: 7px; border-top: 1px solid #bfa16a66; color: #b6c0c5; font: normal 12px/1.6 sans-serif; }
-.immersive-shell .tutorial-hide { flex: 0 0 24px; align-self: flex-start; min-height: 28px; border-left: 0 !important; }
-.immersive-shell .combat-controls { grid-template-columns: repeat(6, var(--hud-action)); gap: 0; bottom: max(16px, env(safe-area-inset-bottom)); }
-.immersive-shell .combat-controls:before { content: ''; position: absolute; z-index: -1; inset: 12px -18px; border-top: 1px solid #bfa16a88; border-bottom: 1px solid #bfa16a88; background: linear-gradient(90deg, transparent, #070e1799 20%, #070e1799 80%, transparent); pointer-events: none; }
-.immersive-shell .combat-controls .action { width: var(--hud-action); height: calc(var(--hud-action) * 1.32); min-height: 0; padding: 22px 3px 17px; gap: 6px; position: relative; transition: filter .16s, transform .16s; }
-.immersive-shell .combat-controls .action span { font-size: 14px; line-height: 1.3; text-shadow: 0 2px 3px #000; }
-.immersive-shell .combat-controls .action > svg:not(.hud-art) { width: 30px; height: 30px; stroke-width: 1.6; filter: drop-shadow(0 0 7px currentColor); }
-.immersive-shell .combat-controls .attack { filter: drop-shadow(0 0 8px #e8a84050); }
-.immersive-shell .combat-controls .attack > svg:not(.hud-art) { color: #ffdc8b; }
-.immersive-shell .combat-controls .heavy > svg:not(.hud-art) { color: #ff956d; }
-.immersive-shell .combat-controls .guard > svg:not(.hud-art) { color: #53e5e1; }
-.immersive-shell .combat-controls .evade > svg:not(.hud-art) { color: #72d4f0; }
-.immersive-shell .combat-controls .combat-skill > svg:not(.hud-art) { color: #c290ff; }
-.immersive-shell .combat-controls .jump > svg:not(.hud-art) { color: #9be3ff; }
-.immersive-shell .combat-controls .action:hover { filter: brightness(1.3) drop-shadow(0 0 7px #d8ab6244); transform: translateY(-3px); }
-.immersive-shell .combat-controls .action:active { transform: translateY(2px) scale(.97); }
-.immersive-shell .combat-controls .guard.active { background: transparent; filter: brightness(1.5) drop-shadow(0 0 12px #53e5e1); }
-.immersive-shell .combat-controls .guard kbd { font-size: 10px; padding-inline: 2px; }
-.immersive-shell .utility-controls { display: grid; gap: 5px; bottom: max(17px, env(safe-area-inset-bottom)); }
-.immersive-shell .utility-controls button, .immersive-shell .auto-run-button { position: relative; width: 184px; min-height: 56px; padding: 13px 17px; gap: 10px; font-size: 14px; }
-.immersive-shell .utility-controls button > svg:not(.hud-art), .immersive-shell .auto-run-button > svg:not(.hud-art) { width: 23px; height: 23px; color: var(--hud-gold); }
-.immersive-shell .utility-controls button kbd, .immersive-shell .auto-run-button kbd { margin-left: auto; }
-.immersive-shell .auto-run-button { position: absolute; bottom: max(139px, calc(env(safe-area-inset-bottom) + 139px)); justify-content: flex-start; }
-.immersive-shell .auto-run-button.active, .immersive-shell .utility-controls .recruit-ready { background: transparent; filter: drop-shadow(0 0 8px #59deb888) brightness(1.2); }
-.immersive-shell .notice { bottom: calc(var(--hud-action) * 1.32 + 64px); min-height: 51px; max-width: min(690px, calc(100% - 440px)); padding: 16px 32px; font-size: 14px; color: #f7dc9f; overflow: visible; overflow-wrap: anywhere; }
-.immersive-shell .fps-lock-hint { bottom: calc(var(--hud-action) * 1.32 + 28px); background: #071019b3; border-color: #a18b5844; font-size: 11px; color: #c4bbaa; }
-.immersive-shell .aim-target { top: calc(50% + 45px); width: max-content; min-width: 230px; max-width: min(330px, calc(100% - 32px)); padding: 18px 35px; text-align: center; color: #ffebe7; }
-.immersive-shell .aim-target b { font-size: 14px; }
-.immersive-shell .aim-target span { font-size: 12px; color: #c8b8bd; }
-.immersive-shell .aim-target.ready { background: transparent; filter: drop-shadow(0 0 7px #e8895460); }
-.immersive-shell .aim-target.ready span { color: #ffdb92; }
-.immersive-shell .interaction-prompt { top: calc(50% + 126px); background: #09131eea; border-color: #bca06c; color: #ffe2a0; font-size: 13px; }
-.immersive-shell .fps-crosshair { width: 26px; height: 26px; filter: drop-shadow(0 0 4px #ffd18488); }
-.immersive-shell .fps-crosshair i { background: #f7dca6; }
-.immersive-shell .fps-crosshair:after { inset: 10px; border: 0; background: #ffe2a0; border-radius: 0; transform: rotate(45deg); }
-.immersive-shell .construction-status { top: 213px; }
-.game-panel.game-panel { border: 1px solid #aa8b58; border-radius: 3px; background: linear-gradient(135deg, #101e29fa, #080f18fc 70%); box-shadow: inset 0 0 0 4px #08111b, inset 0 0 0 5px #9e81494d, 0 25px 90px #000c; }
-.game-panel .panel-head { background: #0c1722fa; border-color: #b69a5d77; color: #ecd19a; }
-.game-panel .adventure-grid button { border-color: #ac90534d; background: linear-gradient(145deg, #1b2934, #0c151f); }
-.game-panel .adventure-grid button:hover { border-color: #e3bc77; background: #24323a; }
-.game-panel .adventure-grid svg { color: #dfbe7b; }
-.game-panel .realm-summary { border-color: #9b82584d; background: #070f18; }
+.identity button:has(.hud-art) {
+  padding: 0 12px 5px;
+}
+.identity button[data-sovereign='true'] {
+  font-size: 27px;
+}
+.identity span {
+  white-space: nowrap;
+  font-size: 15px;
+}
+.identity b {
+  margin-left: 8px;
+  font-family: 'Yu Mincho', 'Hiragino Mincho ProN', serif;
+  font-weight: 600;
+}
+.identity em {
+  position: absolute;
+  right: 26px;
+  top: -3px;
+  padding: 2px 6px;
+  background: #371820;
+  border: 1px solid #b25956;
+  border-radius: 3px;
+  font-size: 11px;
+}
+.vital-row {
+  height: 19px;
+  gap: 7px;
+  margin-top: 5px;
+}
+.vital-row > span {
+  font-size: 13px;
+  width: 20px;
+}
+.vital-row > b {
+  font-size: 13px;
+  min-width: 68px;
+  font-weight: 500;
+}
+.vital-row small {
+  font-size: 12px;
+}
+.vital-row meter {
+  height: 12px;
+  border: 1px solid #9c666b;
+  border-radius: 2px;
+  box-shadow:
+    0 0 0 2px #02090e,
+    0 0 0 3px #72808a55;
+}
+.vital-row meter::-webkit-meter-bar {
+  background: #110d13;
+}
+.vital-row meter::-webkit-meter-optimum-value {
+  background: linear-gradient(#f05261, #b82039 55%, #e64351);
+  box-shadow: inset 0 1px #ffb0af;
+}
+.vital-row meter::-moz-meter-bar {
+  background: linear-gradient(#f05261, #b82039);
+}
+.vital-row.stamina meter {
+  border-color: #68dbe6;
+}
+.vital-row.stamina meter::-webkit-meter-optimum-value {
+  background: linear-gradient(#26d5e0, #048799 60%, #19c4d1);
+  box-shadow: inset 0 1px #a2faff;
+}
+.vital-row.stamina meter::-moz-meter-bar {
+  background: #09b9ce;
+}
+.adventure-vitals.in-combat {
+  filter: drop-shadow(0 0 10px #b93b3b66);
+}
+.adventure-location {
+  top: 157px;
+  left: var(--hud-edge);
+  width: clamp(350px, 28vw, 455px);
+  min-height: 47px;
+  padding: 10px 25px;
+  gap: 12px;
+  font-size: 14px;
+}
+.adventure-location > svg:not(.hud-art) {
+  width: 23px;
+  height: 23px;
+  color: var(--hud-gold);
+  flex-shrink: 0;
+}
+.adventure-location > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.adventure-location b {
+  margin-left: auto;
+  background: #123c36;
+  border: 1px solid #65948755;
+  font-weight: 500;
+}
+.adventure-location.enemy b {
+  color: #ffcbc5;
+  background: #5f1728;
+  box-shadow: 0 0 18px #e4313830;
+  border-color: #ef7e7855;
+}
+.adventure-nav {
+  gap: 8px;
+}
+.adventure-nav button {
+  width: clamp(76px, 6.5vw, 100px);
+  height: clamp(86px, 7.4vw, 114px);
+  padding: 12px 5px;
+  gap: 5px;
+  font-size: 14px;
+  transition:
+    filter 0.15s,
+    transform 0.15s;
+}
+.adventure-nav svg:not(.hud-art) {
+  width: 27px;
+  height: 27px;
+  color: var(--hud-gold);
+  stroke-width: 1.5;
+}
+.adventure-nav kbd,
+.immersive-shell .combat-controls kbd,
+.immersive-shell .utility-controls kbd,
+.immersive-shell .auto-run-button kbd {
+  border: 1px solid #84959f99;
+  border-radius: 3px;
+  background: #08111bdd;
+  padding: 1px 5px;
+  color: #c5d2dc;
+  opacity: 1;
+  font:
+    12px/1.4 Arial,
+    sans-serif;
+}
+.adventure-nav button:hover {
+  filter: brightness(1.3);
+  transform: translateY(-2px);
+}
+.realm-compass {
+  position: absolute;
+  z-index: 6;
+  top: max(30px, env(safe-area-inset-top));
+  left: 51%;
+  width: clamp(180px, 24vw, 400px);
+  transform: translateX(-50%);
+  height: 40px;
+  color: #c8bdac;
+  pointer-events: none;
+  mask-image: linear-gradient(
+    90deg,
+    transparent,
+    #000 12%,
+    #000 88%,
+    transparent
+  );
+}
+.compass-track {
+  height: 1px;
+  margin-top: 8px;
+  background: linear-gradient(90deg, transparent, #bfa577, transparent);
+  position: relative;
+}
+.compass-track span {
+  position: absolute;
+  top: 10px;
+  transform: translateX(-50%);
+  font:
+    10px Georgia,
+    serif;
+  color: #938d87;
+}
+.compass-track span:before {
+  content: '';
+  position: absolute;
+  bottom: 17px;
+  left: 50%;
+  height: 7px;
+  border-left: 1px solid #ae9672;
+}
+.compass-track .cardinal {
+  font-size: 13px;
+  color: #e4d8bc;
+}
+.realm-compass > b {
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #ffdfa2;
+  text-shadow: 0 0 12px #ffbc5c;
+  font-size: 25px;
+}
+.immersive-shell .waypoint-hud {
+  top: 76px;
+}
+.immersive-shell .tutorial-hint {
+  top: 128px;
+  width: min(350px, 29vw);
+  padding: 13px 16px;
+  min-height: 112px;
+  filter: drop-shadow(0 4px 10px #0008);
+}
+.immersive-shell .tutorial-next {
+  padding: 6px 4px;
+  gap: 12px;
+}
+.immersive-shell .tutorial-next > svg {
+  color: var(--hud-gold);
+  flex-shrink: 0;
+  width: 24px;
+}
+.immersive-shell .tutorial-next b {
+  font:
+    600 18px/1.55 'Yu Mincho',
+    serif;
+  color: #fff6e7;
+}
+.immersive-shell .tutorial-next small {
+  font-size: 12px;
+  letter-spacing: 0.03em;
+}
+.tutorial-description {
+  display: block;
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px solid #bfa16a66;
+  color: #b6c0c5;
+  font: normal 12px/1.6 sans-serif;
+}
+.immersive-shell .tutorial-hide {
+  flex: 0 0 24px;
+  align-self: flex-start;
+  min-height: 28px;
+  border-left: 0 !important;
+}
+.immersive-shell .combat-controls {
+  grid-template-columns: repeat(6, var(--hud-action));
+  gap: 0;
+  bottom: max(16px, env(safe-area-inset-bottom));
+}
+.immersive-shell .combat-controls:before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 12px -18px;
+  border-top: 1px solid #bfa16a88;
+  border-bottom: 1px solid #bfa16a88;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    #070e1799 20%,
+    #070e1799 80%,
+    transparent
+  );
+  pointer-events: none;
+}
+.immersive-shell .combat-controls .action {
+  width: var(--hud-action);
+  height: calc(var(--hud-action) * 1.32);
+  min-height: 0;
+  padding: 22px 3px 17px;
+  gap: 6px;
+  position: relative;
+  transition:
+    filter 0.16s,
+    transform 0.16s;
+}
+.immersive-shell .combat-controls .action span {
+  font-size: 14px;
+  line-height: 1.3;
+  text-shadow: 0 2px 3px #000;
+}
+.immersive-shell .combat-controls .action > svg:not(.hud-art) {
+  width: 30px;
+  height: 30px;
+  stroke-width: 1.6;
+  filter: drop-shadow(0 0 7px currentColor);
+}
+.immersive-shell .combat-controls .attack {
+  filter: drop-shadow(0 0 8px #e8a84050);
+}
+.immersive-shell .combat-controls .attack > svg:not(.hud-art) {
+  color: #ffdc8b;
+}
+.immersive-shell .combat-controls .heavy > svg:not(.hud-art) {
+  color: #ff956d;
+}
+.immersive-shell .combat-controls .guard > svg:not(.hud-art) {
+  color: #53e5e1;
+}
+.immersive-shell .combat-controls .evade > svg:not(.hud-art) {
+  color: #72d4f0;
+}
+.immersive-shell .combat-controls .combat-skill > svg:not(.hud-art) {
+  color: #c290ff;
+}
+.immersive-shell .combat-controls .jump > svg:not(.hud-art) {
+  color: #9be3ff;
+}
+.immersive-shell .combat-controls .action:hover {
+  filter: brightness(1.3) drop-shadow(0 0 7px #d8ab6244);
+  transform: translateY(-3px);
+}
+.immersive-shell .combat-controls .action:active {
+  transform: translateY(2px) scale(0.97);
+}
+.immersive-shell .combat-controls .guard.active {
+  background: transparent;
+  filter: brightness(1.5) drop-shadow(0 0 12px #53e5e1);
+}
+.immersive-shell .combat-controls .guard kbd {
+  font-size: 10px;
+  padding-inline: 2px;
+}
+.immersive-shell .utility-controls {
+  display: grid;
+  gap: 5px;
+  bottom: max(17px, env(safe-area-inset-bottom));
+}
+.immersive-shell .utility-controls button,
+.immersive-shell .auto-run-button {
+  position: relative;
+  width: 184px;
+  min-height: 56px;
+  padding: 13px 17px;
+  gap: 10px;
+  font-size: 14px;
+}
+.immersive-shell .utility-controls button > svg:not(.hud-art),
+.immersive-shell .auto-run-button > svg:not(.hud-art) {
+  width: 23px;
+  height: 23px;
+  color: var(--hud-gold);
+}
+.immersive-shell .utility-controls button kbd,
+.immersive-shell .auto-run-button kbd {
+  margin-left: auto;
+}
+.immersive-shell .auto-run-button {
+  position: absolute;
+  bottom: max(139px, calc(env(safe-area-inset-bottom) + 139px));
+  justify-content: flex-start;
+}
+.immersive-shell .auto-run-button.active,
+.immersive-shell .utility-controls .recruit-ready {
+  background: transparent;
+  filter: drop-shadow(0 0 8px #59deb888) brightness(1.2);
+}
+.immersive-shell .notice {
+  bottom: calc(var(--hud-action) * 1.32 + 64px);
+  min-height: 51px;
+  max-width: min(690px, calc(100% - 440px));
+  padding: 16px 32px;
+  font-size: 14px;
+  color: #f7dc9f;
+  overflow: visible;
+  overflow-wrap: anywhere;
+}
+.immersive-shell .fps-lock-hint {
+  bottom: calc(var(--hud-action) * 1.32 + 28px);
+  background: #071019b3;
+  border-color: #a18b5844;
+  font-size: 11px;
+  color: #c4bbaa;
+}
+.immersive-shell .aim-target {
+  top: calc(50% + 45px);
+  width: max-content;
+  min-width: 230px;
+  max-width: min(330px, calc(100% - 32px));
+  padding: 18px 35px;
+  text-align: center;
+  color: #ffebe7;
+}
+.immersive-shell .aim-target b {
+  font-size: 14px;
+}
+.immersive-shell .aim-target span {
+  font-size: 12px;
+  color: #c8b8bd;
+}
+.immersive-shell .aim-target.ready {
+  background: transparent;
+  filter: drop-shadow(0 0 7px #e8895460);
+}
+.immersive-shell .aim-target.ready span {
+  color: #ffdb92;
+}
+.immersive-shell .interaction-prompt {
+  top: calc(50% + 126px);
+  background: #09131eea;
+  border-color: #bca06c;
+  color: #ffe2a0;
+  font-size: 13px;
+}
+.immersive-shell .fps-crosshair {
+  width: 26px;
+  height: 26px;
+  filter: drop-shadow(0 0 4px #ffd18488);
+}
+.immersive-shell .fps-crosshair i {
+  background: #f7dca6;
+}
+.immersive-shell .fps-crosshair:after {
+  inset: 10px;
+  border: 0;
+  background: #ffe2a0;
+  border-radius: 0;
+  transform: rotate(45deg);
+}
+.immersive-shell .construction-status {
+  top: 213px;
+}
+.game-panel.game-panel {
+  border: 1px solid #aa8b58;
+  border-radius: 3px;
+  background: linear-gradient(135deg, #101e29fa, #080f18fc 70%);
+  box-shadow:
+    inset 0 0 0 4px #08111b,
+    inset 0 0 0 5px #9e81494d,
+    0 25px 90px #000c;
+}
+.game-panel .panel-head {
+  background: #0c1722fa;
+  border-color: #b69a5d77;
+  color: #ecd19a;
+}
+.game-panel .adventure-grid button {
+  border-color: #ac90534d;
+  background: linear-gradient(145deg, #1b2934, #0c151f);
+}
+.game-panel .adventure-grid button:hover {
+  border-color: #e3bc77;
+  background: #24323a;
+}
+.game-panel .adventure-grid svg {
+  color: #dfbe7b;
+}
+.game-panel .realm-summary {
+  border-color: #9b82584d;
+  background: #070f18;
+}
 
 /* Compact landscape and touch: retain a free look area between the thumbs. */
 @media (max-width: 1000px), (pointer: coarse) {
-  .immersive-shell { --hud-action: 53px; }
-  .adventure-vitals { width: 232px; min-height: 93px; padding: 13px 16px 13px 65px; }
-  .identity { min-height: 22px; gap: 4px; padding-bottom: 3px; }
-  .identity button { left: 1px; top: -1px; width: 65px; height: 95px; font-size: 30px; }
-  .identity button[data-sovereign='true'] { font-size: 18px; }
-  .identity span { font-size: 12px; }
-  .identity b { display: inline; margin-left: 4px; font-size: 12px; }
-  .vital-row { height: 15px; margin-top: 4px; gap: 4px; }
-  .vital-row > span { width: 15px; font-size: 11px; }
-  .vital-row > b { min-width: 49px; font-size: 11px; }
-  .vital-row small { font-size: 10px; }
-  .vital-row meter { height: 9px; }
-  .adventure-location { top: 108px; left: max(10px, env(safe-area-inset-left)); width: 260px; min-height: 36px; padding: 9px 19px; gap: 6px; font-size: 12px; }
-  .adventure-location > svg:not(.hud-art) { width: 16px; height: 16px; }
-  .adventure-nav button { width: 52px; height: 63px; padding: 7px 3px; gap: 3px; font-size: 11px; }
-  .adventure-nav svg:not(.hud-art) { width: 21px; height: 21px; }
-  .adventure-nav kbd { display: none; }
-  .realm-compass { top: 20px; width: 20vw; left: 54%; }
-  .immersive-shell .tutorial-hint { top: 82px; width: 260px; min-height: 76px; padding: 9px 13px; }
-  .immersive-shell .tutorial-next b { font-size: 14px; }
-  .tutorial-description { display: none; }
-  .immersive-shell .tutorial-next small { font-size: 11px; }
-  .immersive-shell .combat-controls { left: auto; right: max(var(--touch-inset), env(safe-area-inset-right)); grid-template-columns: repeat(3, var(--hud-action)); gap: 1px; bottom: calc(12px + var(--touch-rise) + env(safe-area-inset-bottom)); transform: scale(var(--touch-scale)); transform-origin: bottom right; }
-  .immersive-shell .combat-controls:before { display: none; }
-  .immersive-shell .combat-controls .action { padding: 13px 1px 10px; height: 66px; gap: 3px; }
-  .immersive-shell .combat-controls .action span { font-size: 12px; }
-  .immersive-shell .combat-controls .action > svg:not(.hud-art) { width: 23px; height: 23px; }
-  .immersive-shell .combat-controls .action kbd { display: none; }
-  .immersive-shell .utility-controls { left: auto; right: max(var(--touch-inset), env(safe-area-inset-right)); display: flex; gap: 2px; bottom: calc(153px + var(--touch-rise) + (var(--touch-scale) - 1) * 134px + env(safe-area-inset-bottom)); }
-  .immersive-shell .utility-controls button { width: 80px; min-width: 0; min-height: 44px; padding: 10px; font-size: 12px; gap: 4px; }
-  .immersive-shell .utility-controls kbd, .immersive-shell .auto-run-button kbd { display: none; }
-  .immersive-shell .utility-controls button > svg:not(.hud-art) { width: 16px; height: 16px; }
-  .immersive-shell .auto-run-button { width: 112px; min-height: 45px; font-size: 12px; padding: 11px; gap: 4px; bottom: calc(153px + var(--touch-rise) + (var(--touch-scale) - 1) * 134px + env(safe-area-inset-bottom)); }
-  .immersive-shell .joystick { display: grid; border-color: #bb9d61aa; background: radial-gradient(circle, #101f2d88 55%, #c3a16333 56%, #09121aaa 60%); box-shadow: inset 0 0 0 5px #070f1666, 0 0 0 4px #b59a5933; }
-  .immersive-shell .joystick i { border-color: #e4c786; background: radial-gradient(circle at 35% 25%, #85734dcc, #17232ee6 70%); box-shadow: 0 3px 8px #0008; }
-  .immersive-shell .notice { bottom: calc(215px + var(--touch-rise) + (var(--touch-scale) - 1) * 134px + env(safe-area-inset-bottom)); max-width: min(490px, calc(100% - 28px)); padding: 12px 26px; font-size: 12px; min-height: 44px; }
-  .immersive-shell .fps-lock-hint { display: none; }
-  .immersive-shell .aim-target { top: calc(50% + 24px); padding: 13px 27px; min-width: 200px; }
-  .immersive-shell .aim-target b { font-size: 12px; }
-  .immersive-shell .interaction-prompt { top: calc(50% + 94px); font-size: 12px; }
+  .immersive-shell {
+    --hud-action: 53px;
+  }
+  .adventure-vitals {
+    width: 232px;
+    min-height: 93px;
+    padding: 13px 16px 13px 65px;
+  }
+  .identity {
+    min-height: 22px;
+    gap: 4px;
+    padding-bottom: 3px;
+  }
+  .identity button {
+    left: 1px;
+    top: -1px;
+    width: 65px;
+    height: 95px;
+    font-size: 30px;
+  }
+  .identity button[data-sovereign='true'] {
+    font-size: 18px;
+  }
+  .identity span {
+    font-size: 12px;
+  }
+  .identity b {
+    display: inline;
+    margin-left: 4px;
+    font-size: 12px;
+  }
+  .vital-row {
+    height: 15px;
+    margin-top: 4px;
+    gap: 4px;
+  }
+  .vital-row > span {
+    width: 15px;
+    font-size: 11px;
+  }
+  .vital-row > b {
+    min-width: 49px;
+    font-size: 11px;
+  }
+  .vital-row small {
+    font-size: 10px;
+  }
+  .vital-row meter {
+    height: 9px;
+  }
+  .adventure-location {
+    top: 108px;
+    left: max(10px, env(safe-area-inset-left));
+    width: 260px;
+    min-height: 36px;
+    padding: 9px 19px;
+    gap: 6px;
+    font-size: 12px;
+  }
+  .adventure-location > svg:not(.hud-art) {
+    width: 16px;
+    height: 16px;
+  }
+  .adventure-nav button {
+    width: 52px;
+    height: 63px;
+    padding: 7px 3px;
+    gap: 3px;
+    font-size: 11px;
+  }
+  .adventure-nav svg:not(.hud-art) {
+    width: 21px;
+    height: 21px;
+  }
+  .adventure-nav kbd {
+    display: none;
+  }
+  .realm-compass {
+    top: 20px;
+    width: 20vw;
+    left: 54%;
+  }
+  .immersive-shell .tutorial-hint {
+    top: 82px;
+    width: 260px;
+    min-height: 76px;
+    padding: 9px 13px;
+  }
+  .immersive-shell .tutorial-next b {
+    font-size: 14px;
+  }
+  .tutorial-description {
+    display: none;
+  }
+  .immersive-shell .tutorial-next small {
+    font-size: 11px;
+  }
+  .immersive-shell .combat-controls {
+    left: auto;
+    right: max(var(--touch-inset), env(safe-area-inset-right));
+    grid-template-columns: repeat(3, var(--hud-action));
+    gap: 1px;
+    bottom: calc(12px + var(--touch-rise) + env(safe-area-inset-bottom));
+    transform: scale(var(--touch-scale));
+    transform-origin: bottom right;
+  }
+  .immersive-shell .combat-controls:before {
+    display: none;
+  }
+  .immersive-shell .combat-controls .action {
+    padding: 13px 1px 10px;
+    height: 66px;
+    gap: 3px;
+  }
+  .immersive-shell .combat-controls .action span {
+    font-size: 12px;
+  }
+  .immersive-shell .combat-controls .action > svg:not(.hud-art) {
+    width: 23px;
+    height: 23px;
+  }
+  .immersive-shell .combat-controls .action kbd {
+    display: none;
+  }
+  .immersive-shell .utility-controls {
+    left: auto;
+    right: max(var(--touch-inset), env(safe-area-inset-right));
+    display: flex;
+    gap: 2px;
+    bottom: calc(
+      153px + var(--touch-rise) + (var(--touch-scale) - 1) * 134px +
+        env(safe-area-inset-bottom)
+    );
+  }
+  .immersive-shell .utility-controls button {
+    width: 80px;
+    min-width: 0;
+    min-height: 44px;
+    padding: 10px;
+    font-size: 12px;
+    gap: 4px;
+  }
+  .immersive-shell .utility-controls kbd,
+  .immersive-shell .auto-run-button kbd {
+    display: none;
+  }
+  .immersive-shell .utility-controls button > svg:not(.hud-art) {
+    width: 16px;
+    height: 16px;
+  }
+  .immersive-shell .auto-run-button {
+    width: 112px;
+    min-height: 45px;
+    font-size: 12px;
+    padding: 11px;
+    gap: 4px;
+    bottom: calc(
+      153px + var(--touch-rise) + (var(--touch-scale) - 1) * 134px +
+        env(safe-area-inset-bottom)
+    );
+  }
+  .immersive-shell .joystick {
+    display: grid;
+    border-color: #bb9d61aa;
+    background: radial-gradient(
+      circle,
+      #101f2d88 55%,
+      #c3a16333 56%,
+      #09121aaa 60%
+    );
+    box-shadow:
+      inset 0 0 0 5px #070f1666,
+      0 0 0 4px #b59a5933;
+  }
+  .immersive-shell .joystick i {
+    border-color: #e4c786;
+    background: radial-gradient(circle at 35% 25%, #85734dcc, #17232ee6 70%);
+    box-shadow: 0 3px 8px #0008;
+  }
+  .immersive-shell .notice {
+    bottom: calc(
+      215px + var(--touch-rise) + (var(--touch-scale) - 1) * 134px +
+        env(safe-area-inset-bottom)
+    );
+    max-width: min(490px, calc(100% - 28px));
+    padding: 12px 26px;
+    font-size: 12px;
+    min-height: 44px;
+  }
+  .immersive-shell .fps-lock-hint {
+    display: none;
+  }
+  .immersive-shell .aim-target {
+    top: calc(50% + 24px);
+    padding: 13px 27px;
+    min-width: 200px;
+  }
+  .immersive-shell .aim-target b {
+    font-size: 12px;
+  }
+  .immersive-shell .interaction-prompt {
+    top: calc(50% + 94px);
+    font-size: 12px;
+  }
 }
 @media (max-width: 600px) {
-  .adventure-vitals { width: 205px; left: 5px; top: max(6px, env(safe-area-inset-top)); padding-left: 56px; padding-right: 13px; }
-  .identity button { width: 56px; }
-  .identity span, .identity b { font-size: 11px; }
-  .identity em { top: 87px; right: 10px; }
-  .adventure-nav { top: max(9px, env(safe-area-inset-top)); right: max(5px, env(safe-area-inset-right)); gap: 0; }
-  .adventure-nav button { width: 46px; height: 58px; font-size: 10px; }
-  .adventure-location { top: 99px; width: 260px; font-size: 12px; }
-  .realm-compass { top: 147px; left: 50%; width: 50vw; }
-  .immersive-shell .tutorial-hint { top: 192px; left: 50%; right: auto; transform: translateX(-50%); width: min(310px, calc(100% - 24px)); min-height: 66px; }
-  .immersive-shell .waypoint-hud { top: 264px; }
-  .immersive-shell .boss-health { top: 188px; }
-  .immersive-shell .combat-controls { transform: scale(min(var(--touch-scale), 1.1)); }
-  .immersive-shell .joystick { width: 94px; height: 94px; transform: scale(min(var(--touch-scale), 1.1)); }
-  .immersive-shell .notice { max-height: 90px; }
+  .adventure-vitals {
+    width: 205px;
+    left: 5px;
+    top: max(6px, env(safe-area-inset-top));
+    padding-left: 56px;
+    padding-right: 13px;
+  }
+  .identity button {
+    width: 56px;
+  }
+  .identity span,
+  .identity b {
+    font-size: 11px;
+  }
+  .identity em {
+    top: 87px;
+    right: 10px;
+  }
+  .adventure-nav {
+    top: max(9px, env(safe-area-inset-top));
+    right: max(5px, env(safe-area-inset-right));
+    gap: 0;
+  }
+  .adventure-nav button {
+    width: 46px;
+    height: 58px;
+    font-size: 10px;
+  }
+  .adventure-location {
+    top: 99px;
+    width: 260px;
+    font-size: 12px;
+  }
+  .realm-compass {
+    top: 147px;
+    left: 50%;
+    width: 50vw;
+  }
+  .immersive-shell .tutorial-hint {
+    top: 192px;
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    width: min(310px, calc(100% - 24px));
+    min-height: 66px;
+  }
+  .immersive-shell .waypoint-hud {
+    top: 264px;
+  }
+  .immersive-shell .boss-health {
+    top: 188px;
+  }
+  .immersive-shell .combat-controls {
+    transform: scale(min(var(--touch-scale), 1.1));
+  }
+  .immersive-shell .joystick {
+    width: 94px;
+    height: 94px;
+    transform: scale(min(var(--touch-scale), 1.1));
+  }
+  .immersive-shell .notice {
+    max-height: 90px;
+  }
 }
 @media (max-width: 359px) {
-  .adventure-vitals { width: 179px; padding-left: 48px; }
-  .identity button { width: 48px; font-size: 25px; }
-  .adventure-nav button { width: 44px; }
-  .vital-row > b { min-width: 45px; font-size: 10px; }
-  .vital-row small { font-size: 9px; }
-  .immersive-shell { --hud-action: 48px; }
+  .adventure-vitals {
+    width: 179px;
+    padding-left: 48px;
+  }
+  .identity button {
+    width: 48px;
+    font-size: 25px;
+  }
+  .adventure-nav button {
+    width: 44px;
+  }
+  .vital-row > b {
+    min-width: 45px;
+    font-size: 10px;
+  }
+  .vital-row small {
+    font-size: 9px;
+  }
+  .immersive-shell {
+    --hud-action: 48px;
+  }
 }
 @media (max-height: 500px) and (min-width: 601px) {
-  .adventure-vitals { top: 3px; min-height: 85px; }
-  .adventure-location { top: 94px; }
-  .immersive-shell .tutorial-hint { top: 75px; width: 230px; }
-  .immersive-shell .notice { bottom: auto; top: 21%; max-width: 290px; font-size: 12px; }
-  .immersive-shell .aim-target { top: calc(50% + 20px); }
-  .immersive-shell .interaction-prompt { top: calc(50% + 85px); }
-  .immersive-shell .boss-health { top: 79px; width: 270px; left: 50%; }
+  .adventure-vitals {
+    top: 3px;
+    min-height: 85px;
+  }
+  .adventure-location {
+    top: 94px;
+  }
+  .immersive-shell .tutorial-hint {
+    top: 75px;
+    width: 230px;
+  }
+  .immersive-shell .notice {
+    bottom: auto;
+    top: 21%;
+    max-width: 290px;
+    font-size: 12px;
+  }
+  .immersive-shell .aim-target {
+    top: calc(50% + 20px);
+  }
+  .immersive-shell .interaction-prompt {
+    top: calc(50% + 85px);
+  }
+  .immersive-shell .boss-health {
+    top: 79px;
+    width: 270px;
+    left: 50%;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
-  .immersive-shell .combat-controls .action, .adventure-nav button { transition: none; }
+  .immersive-shell .combat-controls .action,
+  .adventure-nav button {
+    transition: none;
+  }
 }
 
 /* Text-free atlas revision: a single image per frame, clipped to its part.
@@ -218,7 +854,9 @@
   filter: none !important;
   pointer-events: none;
 }
-.immersive-shell .hud-art { overflow: hidden !important; }
+.immersive-shell .hud-art {
+  overflow: hidden !important;
+}
 .immersive-shell .adventure-vitals {
   width: clamp(350px, 29vw, 470px);
   aspect-ratio: 730 / 256;
@@ -228,156 +866,709 @@
   top: max(8px, env(safe-area-inset-top));
   left: max(10px, env(safe-area-inset-left));
 }
-.immersive-shell .identity { display: contents; border: 0; padding: 0; }
+.immersive-shell .identity {
+  display: contents;
+  border: 0;
+  padding: 0;
+}
 .immersive-shell .identity button {
-  left: 4%; top: 21%; width: 24%; height: 61%;
-  padding: 0; background: none; border: 0;
-  display: grid; place-items: center;
+  left: 4%;
+  top: 21%;
+  width: 24%;
+  height: 61%;
+  padding: 0;
+  background: none;
+  border: 0;
+  display: grid;
+  place-items: center;
   font-size: clamp(32px, 3.5vw, 49px);
 }
-.immersive-shell .identity button[data-sovereign='true'] { font-size: 25px; }
+.immersive-shell .identity button[data-sovereign='true'] {
+  font-size: 25px;
+}
 .immersive-shell .identity > span {
-  position: absolute; top: 30%; left: 31%; width: 61%;
-  font-size: clamp(12px, 1.2vw, 17px); line-height: 1.4;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  position: absolute;
+  top: 30%;
+  left: 31%;
+  width: 61%;
+  font-size: clamp(12px, 1.2vw, 17px);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.immersive-shell .identity b { display: inline; margin-left: 8px; }
-.immersive-shell .identity em { top: 89%; right: 6%; font-size: 11px; z-index: 1; }
+.immersive-shell .identity b {
+  display: inline;
+  margin-left: 8px;
+}
+.immersive-shell .identity em {
+  top: 89%;
+  right: 6%;
+  font-size: 11px;
+  z-index: 1;
+}
 .immersive-shell .vital-row {
-  position: absolute; left: 31%; top: 55.1%; width: 60.2%; height: 9.1%;
-  display: flex; align-items: center; padding: 0 7px; margin: 0; gap: 6px;
-  line-height: 1; isolation: isolate; text-shadow: 0 1px 3px #000, 0 0 3px #000;
+  position: absolute;
+  left: 31%;
+  top: 55.1%;
+  width: 60.2%;
+  height: 9.1%;
+  display: flex;
+  align-items: center;
+  padding: 0 7px;
+  margin: 0;
+  gap: 6px;
+  line-height: 1;
+  isolation: isolate;
+  text-shadow:
+    0 1px 3px #000,
+    0 0 3px #000;
 }
-.immersive-shell .vital-row.stamina { top: 70.7%; }
-.immersive-shell .vital-row > span { width: auto; font-size: 11px; color: #fff4e5; }
-.immersive-shell .vital-row > b { margin-left: auto; min-width: 0; font-size: 11px; color: #fff4e5; }
-.immersive-shell .vital-row small { font-size: 10px; color: #fff4e5; }
+.immersive-shell .vital-row.stamina {
+  top: 70.7%;
+}
+.immersive-shell .vital-row > span {
+  width: auto;
+  font-size: 11px;
+  color: #fff4e5;
+}
+.immersive-shell .vital-row > b {
+  margin-left: auto;
+  min-width: 0;
+  font-size: 11px;
+  color: #fff4e5;
+}
+.immersive-shell .vital-row small {
+  font-size: 10px;
+  color: #fff4e5;
+}
 .immersive-shell .vital-row meter {
-  position: absolute; z-index: -1; left: 2px; top: 2px;
-  width: calc(100% - 4px); height: calc(100% - 4px);
-  border: 0; border-radius: 12px; box-shadow: none; background: transparent;
+  position: absolute;
+  z-index: -1;
+  left: 2px;
+  top: 2px;
+  width: calc(100% - 4px);
+  height: calc(100% - 4px);
+  border: 0;
+  border-radius: 12px;
+  box-shadow: none;
+  background: transparent;
 }
-.immersive-shell .vital-row meter::-webkit-meter-bar { background: transparent; }
-.immersive-shell .adventure-location { top: calc(clamp(350px, 29vw, 470px) * 256 / 730 + 14px); }
+.immersive-shell .vital-row meter::-webkit-meter-bar {
+  background: transparent;
+}
+.immersive-shell .adventure-location {
+  top: calc(clamp(350px, 29vw, 470px) * 256 / 730 + 14px);
+}
 .immersive-shell .adventure-nav button {
-  width: clamp(76px, 6.5vw, 100px); height: clamp(76px, 6.5vw, 100px);
-  display: grid; grid-template-rows: 32px 20px 16px; align-content: center;
-  justify-items: center; gap: 1px; padding: 9px;
+  width: clamp(76px, 6.5vw, 100px);
+  height: clamp(76px, 6.5vw, 100px);
+  display: grid;
+  grid-template-rows: 32px 20px 16px;
+  align-content: center;
+  justify-items: center;
+  gap: 1px;
+  padding: 9px;
 }
-.immersive-shell .adventure-nav button .hud-icon { width: 31px; height: 31px; }
-.immersive-shell .adventure-nav kbd { background: none; border: 0; padding: 0; font-size: 11px; }
-.immersive-shell .adventure-nav button:has(> span:last-child) { grid-template-rows: 32px 20px; }
+.immersive-shell .adventure-nav button .hud-icon {
+  width: 31px;
+  height: 31px;
+}
+.immersive-shell .adventure-nav kbd {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: 11px;
+}
+.immersive-shell .adventure-nav button:has(> span:last-child) {
+  grid-template-rows: 32px 20px;
+}
 .immersive-shell .combat-controls .action {
-  display: grid; grid-template-rows: 36px auto 16px; justify-items: center;
-  align-content: center; gap: 4px; padding: 19px 9px;
+  display: grid;
+  grid-template-rows: 36px auto 16px;
+  justify-items: center;
+  align-content: center;
+  gap: 4px;
+  padding: 19px 9px;
   overflow: hidden;
 }
-.immersive-shell .combat-controls .action .hud-icon { width: 36px; height: 36px; }
-.immersive-shell .combat-controls .action span { width: 100%; min-width: 0; text-align: center; line-height: 1.25; font-size: 13px; }
-.immersive-shell .combat-controls .action kbd { border: 0; background: none; padding: 0; font-size: 10px; line-height: 16px; white-space: nowrap; }
-.immersive-shell .combat-controls .guard kbd { font-size: 9px; }
-.immersive-shell .combat-controls:before { display: none; }
-.immersive-shell .utility-controls button, .immersive-shell .auto-run-button {
-  display: grid; grid-template-columns: 26px minmax(0, 1fr) auto;
-  align-items: center; text-align: left; padding: 12px 17px; gap: 6px;
+.immersive-shell .combat-controls .action .hud-icon {
+  width: 36px;
+  height: 36px;
 }
-.immersive-shell .utility-controls .hud-icon, .immersive-shell .auto-run-button .hud-icon { width: 25px; height: 25px; }
-.immersive-shell .utility-controls kbd, .immersive-shell .auto-run-button kbd { border: 0; background: none; padding: 0; }
+.immersive-shell .combat-controls .action span {
+  width: 100%;
+  min-width: 0;
+  text-align: center;
+  line-height: 1.25;
+  font-size: 13px;
+}
+.immersive-shell .combat-controls .action kbd {
+  border: 0;
+  background: none;
+  padding: 0;
+  font-size: 10px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+.immersive-shell .combat-controls .guard kbd {
+  font-size: 9px;
+}
+.immersive-shell .combat-controls:before {
+  display: none;
+}
+.immersive-shell .utility-controls button,
+.immersive-shell .auto-run-button {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  align-items: center;
+  text-align: left;
+  padding: 12px 17px;
+  gap: 6px;
+}
+.immersive-shell .utility-controls .hud-icon,
+.immersive-shell .auto-run-button .hud-icon {
+  width: 25px;
+  height: 25px;
+}
+.immersive-shell .utility-controls kbd,
+.immersive-shell .auto-run-button kbd {
+  border: 0;
+  background: none;
+  padding: 0;
+}
 
 /* Guidance flows down the left rail; targets and interactions live on the right. */
 .immersive-shell .hud-guidance {
-  position: absolute; z-index: 7;
-  left: max(20px, env(safe-area-inset-left)); top: 28%;
-  width: min(285px, 25vw); max-height: calc(72% - 212px);
-  display: flex; flex-direction: column; gap: 14px;
-  overflow: auto; scrollbar-width: thin;
+  position: absolute;
+  z-index: 7;
+  left: max(20px, env(safe-area-inset-left));
+  top: 28%;
+  width: min(285px, 25vw);
+  max-height: calc(72% - 212px);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow: auto;
+  scrollbar-width: thin;
 }
 .immersive-shell .hud-guidance .tutorial-hint,
 .immersive-shell .hud-guidance .notice {
-  position: relative; inset: auto; transform: none;
-  width: 100%; min-width: 0; max-width: none; height: auto;
-  min-height: 0; max-height: none;
-  padding: 8px 10px; border: 0; border-radius: 3px;
+  position: relative;
+  inset: auto;
+  transform: none;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 3px;
   background: linear-gradient(90deg, #07111b80, #07111b15);
-  box-shadow: none; filter: none; text-align: left;
-  font-size: 13px; line-height: 1.6; overflow: visible;
+  box-shadow: none;
+  filter: none;
+  text-align: left;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow: visible;
 }
-.immersive-shell .hud-guidance .notice { color: #e5d7b9; }
-.immersive-shell .hud-guidance .notice:empty { display: none; }
-.immersive-shell .hud-guidance .tutorial-next { padding: 0; gap: 7px; align-items: flex-start; min-height: 44px; }
-.immersive-shell .hud-guidance .tutorial-next .hud-icon { width: 22px; height: 22px; margin-top: 3px; }
-.immersive-shell .hud-guidance .tutorial-next b { font-size: 15px; }
-.immersive-shell .hud-guidance .tutorial-next small { font-size: 11px; }
-.immersive-shell .hud-guidance .tutorial-description { display: block; border: 0; padding: 0; margin-top: 6px; font-size: 12px; }
-.immersive-shell .hud-guidance .tutorial-hide { min-height: 32px; flex-basis: 22px; }
-.immersive-shell .aim-target, .immersive-shell .aim-target.ready,
+.immersive-shell .hud-guidance .notice {
+  color: #e5d7b9;
+}
+.immersive-shell .hud-guidance .notice:empty {
+  display: none;
+}
+.immersive-shell .hud-guidance .tutorial-next {
+  padding: 0;
+  gap: 7px;
+  align-items: flex-start;
+  min-height: 44px;
+}
+.immersive-shell .hud-guidance .tutorial-next .hud-icon {
+  width: 22px;
+  height: 22px;
+  margin-top: 3px;
+}
+.immersive-shell .hud-guidance .tutorial-next b {
+  font-size: 15px;
+}
+.immersive-shell .hud-guidance .tutorial-next small {
+  font-size: 11px;
+}
+.immersive-shell .hud-guidance .tutorial-description {
+  display: block;
+  border: 0;
+  padding: 0;
+  margin-top: 6px;
+  font-size: 12px;
+}
+.immersive-shell .hud-guidance .tutorial-hide {
+  min-height: 32px;
+  flex-basis: 22px;
+}
+.immersive-shell .aim-target,
+.immersive-shell .aim-target.ready,
 .immersive-shell .interaction-prompt {
-  left: auto; right: max(20px, env(safe-area-inset-right));
-  top: 32%; bottom: auto; transform: none;
-  width: min(265px, 23vw); min-width: 0; max-width: none;
-  padding: 9px 12px; border: 0; border-radius: 3px;
+  left: auto;
+  right: max(20px, env(safe-area-inset-right));
+  top: 32%;
+  bottom: auto;
+  transform: none;
+  width: min(265px, 23vw);
+  min-width: 0;
+  max-width: none;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 3px;
   background: linear-gradient(270deg, #07111b80, #07111b15);
-  box-shadow: none; filter: none; text-align: right;
+  box-shadow: none;
+  filter: none;
+  text-align: right;
   pointer-events: none;
 }
-.immersive-shell .aim-target b, .immersive-shell .aim-target span {
-  white-space: normal; overflow-wrap: anywhere; text-overflow: clip;
+.immersive-shell .aim-target b,
+.immersive-shell .aim-target span {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
 }
-.immersive-shell .aim-target b { color: #f1dedb; font-size: 14px; }
-.immersive-shell .aim-target span { font-size: 12px; }
-.immersive-shell .interaction-prompt { top: calc(32% + 116px); justify-content: flex-end; flex-wrap: wrap; font-size: 12px; }
-.immersive-shell .fps-lock-hint { background: transparent; border: 0; opacity: .7; }
+.immersive-shell .aim-target b {
+  color: #f1dedb;
+  font-size: 14px;
+}
+.immersive-shell .aim-target span {
+  font-size: 12px;
+}
+.immersive-shell .interaction-prompt {
+  top: calc(32% + 116px);
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+.immersive-shell .fps-lock-hint {
+  background: transparent;
+  border: 0;
+  opacity: 0.7;
+}
 
 @media (max-width: 1000px), (pointer: coarse) {
-  .immersive-shell .adventure-vitals { width: 240px; }
-  .immersive-shell .identity button { font-size: 30px; }
-  .immersive-shell .identity button[data-sovereign='true'] { font-size: 17px; }
-  .immersive-shell .identity > span { font-size: 11px; }
-  .immersive-shell .vital-row { padding-inline: 4px; }
-  .immersive-shell .vital-row > span, .immersive-shell .vital-row > b, .immersive-shell .vital-row small { font-size: 9px; }
-  .immersive-shell .vital-row meter { top: 1px; height: calc(100% - 2px); }
-  .immersive-shell .adventure-location { top: 97px; }
-  .immersive-shell .adventure-nav button { width: 52px; height: 52px; grid-template-rows: 23px 16px; padding: 6px; gap: 1px; }
-  .immersive-shell .adventure-nav button .hud-icon { width: 23px; height: 23px; }
-  .immersive-shell .adventure-nav button:has(> span:last-child) { grid-template-rows: 23px 16px; }
-  .immersive-shell .adventure-nav button span { font-size: 10px; }
-  .immersive-shell .combat-controls .action { grid-template-rows: 25px 15px; padding: 10px 5px; gap: 1px; }
-  .immersive-shell .combat-controls .action .hud-icon { width: 25px; height: 25px; }
-  .immersive-shell .combat-controls .action span { font-size: 11px; }
-  .immersive-shell .utility-controls button, .immersive-shell .auto-run-button { grid-template-columns: 19px minmax(0, 1fr); padding: 8px 10px; gap: 4px; }
-  .immersive-shell .utility-controls .hud-icon, .immersive-shell .auto-run-button .hud-icon { width: 19px; height: 19px; }
-  .immersive-shell .hud-guidance { top: 145px; left: 12px; width: 25%; max-height: calc(100% - 350px); }
-  .immersive-shell .hud-guidance .tutorial-description { display: none; }
-  .immersive-shell .hud-guidance .tutorial-next b { font-size: 12px; }
-  .immersive-shell .hud-guidance .notice { font-size: 12px; }
-  .immersive-shell .aim-target, .immersive-shell .aim-target.ready { top: 145px; width: 25%; right: 12px; }
-  .immersive-shell .interaction-prompt { top: 244px; right: 12px; width: 25%; }
+  .immersive-shell .adventure-vitals {
+    width: 240px;
+  }
+  .immersive-shell .identity button {
+    font-size: 30px;
+  }
+  .immersive-shell .identity button[data-sovereign='true'] {
+    font-size: 17px;
+  }
+  .immersive-shell .identity > span {
+    font-size: 11px;
+  }
+  .immersive-shell .vital-row {
+    padding-inline: 4px;
+  }
+  .immersive-shell .vital-row > span,
+  .immersive-shell .vital-row > b,
+  .immersive-shell .vital-row small {
+    font-size: 9px;
+  }
+  .immersive-shell .vital-row meter {
+    top: 1px;
+    height: calc(100% - 2px);
+  }
+  .immersive-shell .adventure-location {
+    top: 97px;
+  }
+  .immersive-shell .adventure-nav button {
+    width: 52px;
+    height: 52px;
+    grid-template-rows: 23px 16px;
+    padding: 6px;
+    gap: 1px;
+  }
+  .immersive-shell .adventure-nav button .hud-icon {
+    width: 23px;
+    height: 23px;
+  }
+  .immersive-shell .adventure-nav button:has(> span:last-child) {
+    grid-template-rows: 23px 16px;
+  }
+  .immersive-shell .adventure-nav button span {
+    font-size: 10px;
+  }
+  .immersive-shell .combat-controls .action {
+    grid-template-rows: 25px 15px;
+    padding: 10px 5px;
+    gap: 1px;
+  }
+  .immersive-shell .combat-controls .action .hud-icon {
+    width: 25px;
+    height: 25px;
+  }
+  .immersive-shell .combat-controls .action span {
+    font-size: 11px;
+  }
+  .immersive-shell .utility-controls button,
+  .immersive-shell .auto-run-button {
+    grid-template-columns: 19px minmax(0, 1fr);
+    padding: 8px 10px;
+    gap: 4px;
+  }
+  .immersive-shell .utility-controls .hud-icon,
+  .immersive-shell .auto-run-button .hud-icon {
+    width: 19px;
+    height: 19px;
+  }
+  .immersive-shell .hud-guidance {
+    top: 145px;
+    left: 12px;
+    width: 25%;
+    max-height: calc(100% - 350px);
+  }
+  .immersive-shell .hud-guidance .tutorial-description {
+    display: none;
+  }
+  .immersive-shell .hud-guidance .tutorial-next b {
+    font-size: 12px;
+  }
+  .immersive-shell .hud-guidance .notice {
+    font-size: 12px;
+  }
+  .immersive-shell .aim-target,
+  .immersive-shell .aim-target.ready {
+    top: 145px;
+    width: 25%;
+    right: 12px;
+  }
+  .immersive-shell .interaction-prompt {
+    top: 244px;
+    right: 12px;
+    width: 25%;
+  }
 }
 @media (max-width: 600px) {
-  .immersive-shell .adventure-vitals { width: 205px; left: 3px; }
-  .immersive-shell .identity button { font-size: 26px; }
-  .immersive-shell .identity > span { font-size: 10px; }
-  .immersive-shell .adventure-nav { right: 3px; }
-  .immersive-shell .adventure-nav button { width: 44px; height: 50px; }
-  .immersive-shell .adventure-location { top: 88px; }
-  .immersive-shell .realm-compass { top: 128px; }
-  .immersive-shell .hud-guidance { top: 178px; width: 43%; left: 8px; max-height: calc(100% - 395px); gap: 8px; }
-  .immersive-shell .hud-guidance .tutorial-hint, .immersive-shell .hud-guidance .notice { padding: 6px; }
-  .immersive-shell .hud-guidance .tutorial-next .hud-icon { display: none; }
-  .immersive-shell .hud-guidance .tutorial-next > svg:last-child { display: none; }
-  .immersive-shell .hud-guidance .tutorial-next small { font-size: 10px; }
-  .immersive-shell .aim-target, .immersive-shell .aim-target.ready { top: 178px; width: 43%; right: 8px; padding: 6px; }
-  .immersive-shell .aim-target b { font-size: 12px; }
-  .immersive-shell .interaction-prompt { top: 280px; right: 8px; width: 43%; padding: 6px; }
+  .immersive-shell .adventure-vitals {
+    width: 205px;
+    left: 3px;
+  }
+  .immersive-shell .identity button {
+    font-size: 26px;
+  }
+  .immersive-shell .identity > span {
+    font-size: 10px;
+  }
+  .immersive-shell .adventure-nav {
+    right: 3px;
+  }
+  .immersive-shell .adventure-nav button {
+    width: 44px;
+    height: 50px;
+  }
+  .immersive-shell .adventure-location {
+    top: 88px;
+  }
+  .immersive-shell .realm-compass {
+    top: 128px;
+  }
+  .immersive-shell .hud-guidance {
+    top: 178px;
+    width: 43%;
+    left: 8px;
+    max-height: calc(100% - 395px);
+    gap: 8px;
+  }
+  .immersive-shell .hud-guidance .tutorial-hint,
+  .immersive-shell .hud-guidance .notice {
+    padding: 6px;
+  }
+  .immersive-shell .hud-guidance .tutorial-next .hud-icon {
+    display: none;
+  }
+  .immersive-shell .hud-guidance .tutorial-next > svg:last-child {
+    display: none;
+  }
+  .immersive-shell .hud-guidance .tutorial-next small {
+    font-size: 10px;
+  }
+  .immersive-shell .aim-target,
+  .immersive-shell .aim-target.ready {
+    top: 178px;
+    width: 43%;
+    right: 8px;
+    padding: 6px;
+  }
+  .immersive-shell .aim-target b {
+    font-size: 12px;
+  }
+  .immersive-shell .interaction-prompt {
+    top: 280px;
+    right: 8px;
+    width: 43%;
+    padding: 6px;
+  }
 }
 @media (max-width: 359px) {
-  .immersive-shell .adventure-vitals { width: 184px; }
-  .immersive-shell .identity > span { font-size: 9px; }
+  .immersive-shell .adventure-vitals {
+    width: 184px;
+  }
+  .immersive-shell .identity > span {
+    font-size: 9px;
+  }
 }
 @media (max-height: 500px) and (min-width: 601px) {
-  .immersive-shell .hud-guidance { top: 130px; max-height: calc(100% - 282px); width: 26%; }
-  .immersive-shell .hud-guidance .tutorial-hint { display: none; }
-  .immersive-shell .aim-target, .immersive-shell .aim-target.ready { top: 85px; width: 26%; }
-  .immersive-shell .interaction-prompt { top: 158px; width: 26%; }
-  .immersive-shell .hud-guidance .notice { font-size: 11px; }
+  .immersive-shell .hud-guidance {
+    top: 130px;
+    max-height: calc(100% - 282px);
+    width: 26%;
+  }
+  .immersive-shell .hud-guidance .tutorial-hint {
+    display: none;
+  }
+  .immersive-shell .aim-target,
+  .immersive-shell .aim-target.ready {
+    top: 85px;
+    width: 26%;
+  }
+  .immersive-shell .interaction-prompt {
+    top: 158px;
+    width: 26%;
+  }
+  .immersive-shell .hud-guidance .notice {
+    font-size: 11px;
+  }
+}
+
+/* Clear sight lines: guidance stays left, messages stay right, actions sit below the reticle. */
+.immersive-shell .hud-guidance {
+  overflow: visible;
+}
+.immersive-shell .hud-message {
+  left: auto;
+  right: max(20px, env(safe-area-inset-right));
+  top: calc(32% + 116px);
+  bottom: auto;
+  transform: none;
+  width: min(285px, 25vw);
+  min-width: 0;
+  max-width: none;
+  min-height: 0;
+  max-height: 112px;
+  padding: 9px 12px;
+  overflow: auto;
+  border: 0;
+  border-radius: 3px;
+  background: linear-gradient(270deg, #07111b8c, #07111b18);
+  box-shadow: none;
+  color: #e5d7b9;
+  font-size: 13px;
+  line-height: 1.55;
+  text-align: right;
+  pointer-events: none;
+}
+.immersive-shell .hud-message:empty {
+  display: none;
+}
+.immersive-shell .interaction-prompt,
+.immersive-shell .interaction-prompt.recruit-prompt {
+  left: 50%;
+  right: auto;
+  top: calc(50% + 92px);
+  bottom: auto;
+  transform: translateX(-50%);
+  width: min(330px, calc(100% - 32px));
+  max-width: calc(100% - 32px);
+  justify-content: center;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  background: linear-gradient(
+    90deg,
+    #07111b20,
+    #07111ba8 22%,
+    #07111ba8 78%,
+    #07111b20
+  );
+  text-align: center;
+}
+
+/* The atlas contains neighbouring ornaments very close to each crop edge. */
+.immersive-shell .combat-controls .action {
+  contain: paint;
+  clip-path: inset(0 round 2px);
+}
+.immersive-shell .combat-controls .action > .hud-art {
+  inset: 2px 1px 0;
+  width: calc(100% - 2px) !important;
+  height: calc(100% - 2px) !important;
+}
+
+@media (max-width: 1000px), (pointer: coarse) {
+  .immersive-shell .hud-message {
+    top: 244px;
+    right: 12px;
+    width: 25%;
+    max-height: 96px;
+    padding: 7px 9px;
+    font-size: 12px;
+  }
+  .immersive-shell .interaction-prompt,
+  .immersive-shell .interaction-prompt.recruit-prompt {
+    top: calc(50% + 72px);
+    width: min(300px, calc(100% - 28px));
+  }
+}
+
+@media (max-width: 600px) {
+  .immersive-shell {
+    --hud-action: 44px;
+  }
+  .immersive-shell .adventure-vitals {
+    width: 178px;
+  }
+  .immersive-shell .identity button {
+    font-size: 22px;
+  }
+  .immersive-shell .identity > span,
+  .immersive-shell .identity b {
+    font-size: 9px;
+  }
+  .immersive-shell .vital-row > span,
+  .immersive-shell .vital-row > b,
+  .immersive-shell .vital-row small {
+    font-size: 8px;
+  }
+  .immersive-shell .adventure-nav button {
+    width: 39px;
+    height: 45px;
+    grid-template-rows: 19px 13px;
+    padding: 4px;
+  }
+  .immersive-shell .adventure-nav button .hud-icon {
+    width: 19px;
+    height: 19px;
+  }
+  .immersive-shell .adventure-nav button span {
+    font-size: 8px;
+  }
+  .immersive-shell .adventure-location {
+    top: 78px;
+    width: 220px;
+    min-height: 30px;
+    padding: 6px 15px;
+    font-size: 10px;
+  }
+  .immersive-shell .realm-compass {
+    top: 110px;
+  }
+  .immersive-shell .hud-guidance {
+    top: 150px;
+    left: 7px;
+    width: 40%;
+    max-height: 130px;
+  }
+  .immersive-shell .hud-guidance .tutorial-hint {
+    padding: 5px;
+  }
+  .immersive-shell .hud-guidance .tutorial-next {
+    min-height: 34px;
+  }
+  .immersive-shell .hud-guidance .tutorial-next b,
+  .immersive-shell .hud-guidance .tutorial-next small {
+    font-size: 9px;
+  }
+  .immersive-shell .aim-target,
+  .immersive-shell .aim-target.ready {
+    top: 150px;
+    right: 7px;
+    width: 40%;
+    padding: 5px;
+  }
+  .immersive-shell .aim-target b {
+    font-size: 10px;
+  }
+  .immersive-shell .aim-target span {
+    font-size: 9px;
+  }
+  .immersive-shell .hud-message {
+    top: 220px;
+    right: 7px;
+    width: 40%;
+    max-height: 78px;
+    padding: 5px 6px;
+    font-size: 9px;
+  }
+  .immersive-shell .interaction-prompt,
+  .immersive-shell .interaction-prompt.recruit-prompt {
+    top: calc(50% + 54px);
+    width: min(250px, calc(100% - 80px));
+    padding: 6px 9px;
+    font-size: 10px;
+  }
+  .immersive-shell .combat-controls {
+    right: max(6px, env(safe-area-inset-right));
+    bottom: max(8px, env(safe-area-inset-bottom));
+    grid-template-columns: repeat(3, 44px);
+    gap: 1px;
+    transform: scale(min(var(--touch-scale), 0.9));
+  }
+  .immersive-shell .combat-controls .action {
+    width: 44px;
+    height: 54px;
+    grid-template-rows: 21px 13px;
+    padding: 8px 3px;
+  }
+  .immersive-shell .combat-controls .action .hud-icon {
+    width: 21px;
+    height: 21px;
+  }
+  .immersive-shell .combat-controls .action span {
+    font-size: 9px;
+  }
+  .immersive-shell .utility-controls {
+    right: max(6px, env(safe-area-inset-right));
+    bottom: 119px;
+    gap: 2px;
+    transform: scale(0.86);
+    transform-origin: bottom right;
+  }
+  .immersive-shell .utility-controls button {
+    width: 69px;
+    min-height: 40px;
+    padding: 6px 7px;
+    font-size: 10px;
+  }
+  .immersive-shell .auto-run-button {
+    width: 98px;
+    min-height: 40px;
+    bottom: 119px;
+    padding: 7px;
+    font-size: 10px;
+    transform: scale(0.86);
+    transform-origin: bottom left;
+  }
+  .immersive-shell .joystick {
+    width: 82px;
+    height: 82px;
+    left: max(11px, env(safe-area-inset-left));
+    bottom: max(22px, env(safe-area-inset-bottom));
+    transform: scale(min(var(--touch-scale), 0.92));
+  }
+  .immersive-shell .joystick i {
+    width: 32px;
+    height: 32px;
+  }
+}
+
+@media (max-width: 380px), (max-height: 700px) and (max-width: 600px) {
+  .immersive-shell .combat-controls {
+    transform: scale(min(var(--touch-scale), 0.82));
+  }
+  .immersive-shell .utility-controls,
+  .immersive-shell .auto-run-button {
+    transform: scale(0.78);
+  }
+  .immersive-shell .joystick {
+    transform: scale(min(var(--touch-scale), 0.84));
+  }
 }

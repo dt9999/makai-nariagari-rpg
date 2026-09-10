@@ -3290,9 +3290,9 @@ export default function Home() {
                 }}
               />
             )}
-          <div className="notice" role="status">
-            {hud.message}
-          </div>
+        </div>
+        <div className="notice hud-message" role="status">
+          {hud.message}
         </div>
         {guideOpen && (
           <TutorialPanel
