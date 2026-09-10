@@ -17,6 +17,65 @@
   min-height: 62px;
   cursor: pointer;
 }
+.story-current,
+.story-archive {
+  padding: 20px;
+}
+.story-current h2 {
+  color: #f5d89e;
+  font-size: 23px;
+  margin: 10px 0 20px;
+}
+.game-panel .story-current p,
+.game-panel .story-archive p {
+  font-size: 16px;
+  line-height: 1.95;
+  color: #d3d8dd;
+  overflow-wrap: anywhere;
+}
+.story-current > small {
+  color: #b2a388;
+}
+.story-objective {
+  margin: 24px 0;
+  border-left: 2px solid #d4b36c;
+  padding: 14px 18px;
+  background: #17232e;
+}
+.story-objective b {
+  color: #ffe5b1;
+}
+.story-objective button {
+  padding: 10px 16px;
+  border: 1px solid #ae945f;
+  background: #353020;
+  color: #ffe3ab;
+  border-radius: 5px;
+}
+.game-panel p.story-clue {
+  color: #becccf;
+  font-size: 14px;
+  border-top: 1px solid #796c4844;
+  padding-top: 14px;
+}
+.story-archive details {
+  border-bottom: 1px solid #796c4844;
+  padding: 12px 0;
+}
+.story-archive summary {
+  cursor: pointer;
+  min-height: 44px;
+  color: #e6c990;
+}
+@media (max-width: 600px) {
+  .story-current,
+  .story-archive {
+    padding: 12px 4px;
+  }
+  .story-current h2 {
+    font-size: 20px;
+  }
+}
 .tutorial-next {
   display: flex;
   align-items: center;

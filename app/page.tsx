@@ -52,6 +52,7 @@ import { InventoryPanel } from './inventory-panel';
 import { RealmMap } from './realm-map';
 import { PreferencesPanel } from './preferences-panel';
 import { TutorialHint, TutorialPanel } from './tutorial-panel';
+import { storyCampLine, storyProgress } from './story';
 import {
   newTutorial,
   completeLesson,
@@ -1412,6 +1413,7 @@ export default function Home() {
     menuOpenRef = useRef(false),
     quickMenuRef = useRef<string | null>(null),
     saveReadyRef = useRef(false),
+    lastStoryChapter = useRef<string | null>(null),
     [hud, setHud] = useState<World>(fresh),
     [mapOpen, setMapOpen] = useState(false),
     [rankOpen, setRankOpen] = useState(false),
@@ -1668,6 +1670,7 @@ export default function Home() {
     applyCareer(w, id, career);
     playSound('confirm');
     w.message = j.name + 'として目覚めた。武器「' + j.weapon + '」を手にした！';
+    setGuideOpen(true);
     sync();
   };
   const changeJob = (id: string) => {
@@ -2098,7 +2101,7 @@ export default function Home() {
           y: target.y,
         };
         return say(
-          `道守り「${first ? '旅支度に薬と資材を持っていけ。' : 'ここで傷を癒やしていけ。'}資源地を調べ、前線基地を構えてから領主へ向かうといい」— 地図に情報を記録。`,
+          `傷を癒やし、物資を確認した。${storyCampLine(w)} — 物語の続きはメニューの「物語・手引き」へ。`,
         );
       }
       if (w.activatedSites.includes(site.id))
@@ -3317,6 +3320,22 @@ export default function Home() {
     hud.preferences?.sfxVolume,
     hud.preferences?.audioMuted,
   ]);
+  const currentStory = storyProgress(hud).chapter;
+  useEffect(() => {
+    if (!hud.job) {
+      lastStoryChapter.current = null;
+      return;
+    }
+    if (
+      lastStoryChapter.current &&
+      lastStoryChapter.current !== currentStory.id
+    ) {
+      game.current.message = `物語更新：${currentStory.title} — メニューの「物語・手引き」で続きを読めます。`;
+      playSound('confirm');
+      sync();
+    }
+    lastStoryChapter.current = currentStory.id;
+  }, [hud.job, currentStory.id, currentStory.title, sync]);
   return (
     <main className="game-shell immersive-shell">
       <section
@@ -3337,6 +3356,7 @@ export default function Home() {
             hud.bannerTime <= 0 &&
             !inCombat && (
               <TutorialHint
+                world={hud}
                 state={hud.tutorial}
                 onOpen={() => openScreen('guide')}
                 onHide={() => {
@@ -3351,6 +3371,11 @@ export default function Home() {
         </div>
         {guideOpen && (
           <TutorialPanel
+            world={hud}
+            onWaypoint={(target) => {
+              setWaypoint(target);
+              setGuideOpen(false);
+            }}
             state={hud.tutorial}
             bindings={bindings}
             onClose={() => setGuideOpen(false)}
@@ -3373,7 +3398,7 @@ export default function Home() {
             <span className="ending-kicker">THE DEMON KING ASCENDS</span>
             <h2>最弱の魔族は、魔界を守る王となった</h2>
             <p>
-              暁断の勇者レオニスは倒れた。小さな隠れ家から始まった勢力は、配下と領土と魔王城を築き、ついに魔界の頂点へ到達した。
+              勇者の剣と炉を結ぶ刻印は砕けた。あなたはレオニスへ手を差し出す。誰かひとりを燃やさなくても、仲間が築いた国は動き続ける。物語日誌に「はじめての名前」が記された。
             </p>
             <div className="ending-record">
               <span>

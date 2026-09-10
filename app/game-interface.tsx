@@ -62,8 +62,8 @@ export function GamePanel({
 const SCREENS = [
   {
     id: 'guide',
-    title: '冒険の手引き',
-    description: '移動から配下・建築まで、操作をひとつずつ練習。',
+    title: '物語・手引き',
+    description: '残火の誓い。現在の物語、手掛かり、次の目的と操作を確認。',
     Icon: BookOpen,
   },
   {
