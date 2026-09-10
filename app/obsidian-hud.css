@@ -1342,6 +1342,8 @@
 
 /* Clear sight lines: guidance stays left, messages stay right, actions sit below the reticle. */
 .immersive-shell .hud-guidance {
+  /* Match the status panel height, then clear the region bar and its gap. */
+  top: calc(clamp(350px, 29vw, 470px) * 256 / 730 + 90px);
   overflow: visible;
 }
 .immersive-shell .hud-message {
@@ -1404,6 +1406,9 @@
 }
 
 @media (max-width: 1000px), (pointer: coarse) {
+  .immersive-shell .hud-guidance {
+    top: 158px;
+  }
   .immersive-shell .hud-message {
     top: 244px;
     right: 12px;

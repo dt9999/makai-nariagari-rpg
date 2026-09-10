@@ -1,13 +1,13 @@
 'use client';
 
-// Display the supplied text-free atlases directly, without masks or cover-ups.
+// Clip each atlas part so neighbouring frames cannot bleed into a control.
 const FRAMES = {
   status: [8, 47, 730, 256],
   panel: [784, 308, 654, 230],
   utility: [12, 455, 371, 135],
   nav: [946, 136, 163, 163],
   hex: [344, 831, 194, 242],
-  attack: [140, 831, 206, 251],
+  attack: [140, 846, 206, 236],
   notice: [435, 692, 948, 135],
 } as const;
 const ICONS = {
@@ -33,6 +33,14 @@ export function HudArt({ kind = 'panel' }: { kind?: keyof typeof FRAMES }) {
       className={'hud-art hud-art-' + kind}
       viewBox={FRAMES[kind].join(' ')}
       preserveAspectRatio="none"
+      style={
+        kind === 'attack' || kind === 'hex'
+          ? {
+              clipPath:
+                'polygon(46% 0, 54% 0, 100% 27%, 100% 76%, 54% 100%, 46% 100%, 0 76%, 0 27%)',
+            }
+          : undefined
+      }
       aria-hidden="true"
       focusable="false"
     >
