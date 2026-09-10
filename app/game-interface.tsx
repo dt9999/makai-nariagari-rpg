@@ -110,8 +110,8 @@ const SCREENS = [
   },
   {
     id: 'settings',
-    title: '操作設定',
-    description: '画質・視点・タッチ配置・PCキーを調整。',
+    title: '設定',
+    description: '画質・音・視点・タッチ配置・PCキーを調整。',
     Icon: Settings,
   },
 ] as const;

@@ -496,11 +496,10 @@
   position: fixed;
   z-index: 60;
   display: block;
-  inset: auto;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  inset: 50% auto auto 50% !important;
+  transform: translate(-50%, -50%) !important;
   translate: none;
+  margin: 0 !important;
   width: min(960px, calc(100vw - 32px));
   max-width: none;
   max-height: calc(100dvh - 32px);

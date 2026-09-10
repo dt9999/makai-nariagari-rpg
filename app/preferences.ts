@@ -7,6 +7,10 @@ export type GamePreferences = {
   fov: number;
   cameraMotion: number;
   weaponMotion: number;
+  masterVolume: number;
+  musicVolume: number;
+  sfxVolume: number;
+  audioMuted: boolean;
   touchScale: number;
   touchRise: number;
   touchInset: number;
@@ -19,6 +23,10 @@ export const DEFAULT_PREFERENCES: GamePreferences = {
   fov: 72,
   cameraMotion: 0.45,
   weaponMotion: 1,
+  masterVolume: 0.75,
+  musicVolume: 0.45,
+  sfxVolume: 0.8,
+  audioMuted: false,
   touchScale: 1,
   touchRise: 0,
   touchInset: 12,
@@ -29,6 +37,9 @@ const BOUNDS = {
   fov: [55, 95],
   cameraMotion: [0, 1],
   weaponMotion: [0, 1],
+  masterVolume: [0, 1],
+  musicVolume: [0, 1],
+  sfxVolume: [0, 1],
   touchScale: [0.95, 1.15],
   touchRise: [0, 64],
   touchInset: [4, 20],
@@ -45,6 +56,8 @@ export function sanitizePreferences(value: unknown): GamePreferences {
   )
     result.quality = input.quality;
   if (typeof input.invertY === 'boolean') result.invertY = input.invertY;
+  if (typeof input.audioMuted === 'boolean')
+    result.audioMuted = input.audioMuted;
   for (const key of Object.keys(BOUNDS) as (keyof typeof BOUNDS)[]) {
     const n = input[key],
       [min, max] = BOUNDS[key];

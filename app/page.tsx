@@ -84,6 +84,7 @@ import './inventory.css';
 import './game-interface.css';
 import './obsidian-hud.css';
 import { HudArt, HudIcon } from './hud-art';
+import { configureAudio, playSound, setAudioScene, unlockAudio } from './audio';
 import { decodeGameSave, encodeGameSave, GAME_SAVE_KEY } from './save-game';
 import { finalBattleStatus, finalCastle } from './final-battle';
 import {
@@ -1513,6 +1514,7 @@ export default function Home() {
   }, [saveAdventure]);
   const changePreferences = (value: GamePreferences) => {
     game.current.preferences = sanitizePreferences(value);
+    configureAudio(game.current.preferences);
     try {
       localStorage.setItem(
         'makai-preferences',
@@ -1533,6 +1535,15 @@ export default function Home() {
     }
     sync();
   }, [sync]);
+  useEffect(() => {
+    const unlock = () => unlockAudio();
+    addEventListener('pointerdown', unlock, { once: true });
+    addEventListener('keydown', unlock, { once: true });
+    return () => {
+      removeEventListener('pointerdown', unlock);
+      removeEventListener('keydown', unlock);
+    };
+  }, []);
   useEffect(() => {
     quickMenuRef.current = inventoryOpen ? 'inventory' : mapOpen ? 'map' : null;
     if (!controlsOpen) {
@@ -1580,6 +1591,7 @@ export default function Home() {
     sync,
   ]);
   const openScreen = (screen: GameScreen) => {
+    playSound('menu');
     setAdventureOpen(false);
     setInventoryOpen(screen === 'inventory');
     setMapOpen(screen === 'map');
@@ -1596,6 +1608,7 @@ export default function Home() {
     id: string,
   ) => {
     const w = game.current;
+    playSound(action === 'discard' ? 'dodge' : 'confirm');
     say(
       {
         equip: equipItem,
@@ -1637,6 +1650,7 @@ export default function Home() {
     if (!w.job || !w.grounded) return;
     w.velocityY = 6.2;
     w.grounded = false;
+    playSound('dodge');
   };
   const changeBinding = (action: BindingAction, key: string) => {
     const next = { ...bindingsRef.current, [action]: key };
@@ -1652,6 +1666,7 @@ export default function Home() {
     if (!j || j.tier !== 'base') return;
     let career = newCareer(j);
     applyCareer(w, id, career);
+    playSound('confirm');
     w.message = j.name + 'として目覚めた。武器「' + j.weapon + '」を手にした！';
     sync();
   };
@@ -1672,6 +1687,7 @@ export default function Home() {
     }
     let career = w.careers[id] || newCareer(j);
     applyCareer(w, id, career);
+    playSound('magic');
     w.message =
       j.name +
       'へ転職。' +
@@ -1689,6 +1705,7 @@ export default function Home() {
     w.wood -= cost;
     w.ore -= cost;
     w.weaponLevel++;
+    playSound('confirm');
     const forged = weaponFor(w.job, Math.min(3, Math.floor(w.rank / 2)));
     receiveItem(w, forged);
     w.message =
@@ -1795,6 +1812,7 @@ export default function Home() {
     w.attackTotal = 0.62;
     w.attackAnim = w.attackTotal;
     w.attackKind = 'normal';
+    playSound('attack');
     if (!t) return say('空振り。敵を正面と間合いに捉えよう。');
     let branchPower =
         1 + w.unlocked.filter((s) => s.endsWith('a')).length * 0.08,
@@ -1854,6 +1872,7 @@ export default function Home() {
     w.attackTotal = 0.96;
     w.attackAnim = w.attackTotal;
     w.attackKind = 'heavy';
+    playSound('heavy');
     if (!t)
       return say('強攻撃が空を切った。スタミナを回復して間合いを詰めよう。');
     let hit = Math.floor(
@@ -1881,6 +1900,7 @@ export default function Home() {
     w.energy -= 22;
     w.dodgeCd = 0.82;
     w.dodgeTime = 0.48;
+    playSound('dodge');
     Object.assign(
       w,
       moveAroundBuildings(
@@ -1918,6 +1938,7 @@ export default function Home() {
     w.attackTotal = 1.08;
     w.attackAnim = w.attackTotal;
     w.attackKind = 'skill';
+    playSound('magic');
     w.message = (known?.name || j.name + '固有技') + 'の魔力を全身に集める！';
     sync();
   };
@@ -1957,6 +1978,7 @@ export default function Home() {
         (w.recruitRefusals ?? 0) + 1,
       );
       w.message = `${target.name}は服従を拒み、瘴気へ還った。成功率 ${Math.round(chance * 100)}%。次回の服従圧 +${Math.round(w.recruitRefusals * RECRUIT_REFUSAL_BONUS * 100)}%。`;
+      playSound('hurt');
       sync();
       return;
     }
@@ -1975,6 +1997,7 @@ export default function Home() {
         w.roster.push(minionFrom(mob, assignment));
     });
     w.minions = w.roster.length;
+    playSound('recruit');
     w.recruitRefusals = 0;
     completeLesson(w.tutorial, 'recruit');
     if (firstRecruitment && w.minions > 0) w.achievements++;
@@ -2050,6 +2073,7 @@ export default function Home() {
     if (['camp', 'shrine', 'vista'].includes(interaction.kind)) {
       const site = DISCOVERY_SITES.find((s) => s.id === interaction.id)!;
       if (interaction.kind === 'camp') {
+        playSound('confirm');
         completeLesson(w.tutorial, 'camp');
         const first = recordSiteVisit(w.talkedSites, site.id);
         if (first) {
@@ -2085,6 +2109,7 @@ export default function Home() {
       )
         return say('祭壇を守る魔物がいる。先に周囲の敵を倒そう。');
       recordSiteVisit(w.activatedSites, site.id);
+      playSound('magic');
       w.achievements++;
       gain(interaction.kind === 'vista' ? 30 : 45);
       const reward =
@@ -2103,6 +2128,7 @@ export default function Home() {
         ? w.loot.find((item) => item.id === interaction.id)
         : undefined;
     if (loot) {
+      playSound('loot');
       receiveItem(w, loot.item, loot.count);
       loot.claimed = true;
       if (loot.chest) {
@@ -2116,6 +2142,7 @@ export default function Home() {
     let n = w.nodes.find((n) => n.id === interaction.id);
     if (!n) return say('宝箱・落ちたアイテム・光る採集物へ近づいて調べよう。');
     n.n--;
+    playSound('gather');
     completeLesson(w.tutorial, 'gather');
     if (n.kind === 'wood') w.wood++;
     else w.ore++;
@@ -2186,6 +2213,7 @@ export default function Home() {
       complete: false,
       workers: 0,
     });
+    playSound('confirm');
     w.message = `${definition.name}を着工。正面へ近づき、建物を見て立ち止まると作業。建築担当の配下も現地へ向かいます。`;
     sync();
   };
@@ -2216,6 +2244,7 @@ export default function Home() {
       attackAnim: 0,
       attackCd: 0.8,
     });
+    playSound('magic');
     w.message = '領土ボスが出現！ 倒せばこの地を奪える。';
     sync();
   };
@@ -2228,6 +2257,7 @@ export default function Home() {
     w.hp = w.maxHp;
     w.achievements++;
     setRankEvolution(w.rank);
+    playSound('rank');
     w.message =
       w.rank === 7
         ? '魔王戴冠！ レベルだけでは届かない覇道を成し遂げた。'
@@ -2527,7 +2557,8 @@ export default function Home() {
     let last = performance.now(),
       frame = 0,
       id = 0,
-      autoRunBlockedFor = 0;
+      autoRunBlockedFor = 0,
+      footstepDistance = 0;
     const loop = (now: number) => {
       if (!view) {
         last = now;
@@ -2611,6 +2642,16 @@ export default function Home() {
         ),
       );
       const travelled = d(w, previousPosition);
+      if (w.grounded && travelled > 0.02) {
+        footstepDistance += travelled;
+        const stride = sprinting ? 58 : 76;
+        if (footstepDistance >= stride) {
+          footstepDistance %= stride;
+          playSound('step');
+        }
+      } else if (travelled <= 0.02) {
+        footstepDistance = 0;
+      }
       recordTutorialMotion(w.tutorial, travelled, 0);
       autoRunBlockedFor = nextAutoRunBlockedTime(
         w.autoRun,
@@ -2774,6 +2815,7 @@ export default function Home() {
       w.pendingHits.forEach((hit) => (hit.delay -= dt));
       let impacts = w.pendingHits.filter((hit) => hit.delay <= 0);
       w.pendingHits = w.pendingHits.filter((hit) => hit.delay > 0);
+      if (impacts.length) playSound('hit');
       impacts.forEach((hit) => {
         let t = w.mobs.find((m) => m.id === hit.target);
         if (
@@ -3093,6 +3135,7 @@ export default function Home() {
                 w.energy = Math.max(0, w.energy - 10);
               }
               w.hp -= harm;
+              playSound(w.guarding ? 'hit' : 'hurt');
               w.hitAnim = 0.34;
               w.damageSource = { x: m.x, y: m.y, name: m.name, remaining: 1.8 };
               w.autoRun = false;
@@ -3262,6 +3305,18 @@ export default function Home() {
         hud.roster.filter((unit) => unit.assignment === task.id).length,
       ]),
     ) as Record<MinionTask, number>;
+  useEffect(() => {
+    const preferences = hud.preferences || DEFAULT_PREFERENCES;
+    configureAudio(preferences);
+    setAudioScene(current.id, inCombat);
+  }, [
+    current.id,
+    inCombat,
+    hud.preferences?.masterVolume,
+    hud.preferences?.musicVolume,
+    hud.preferences?.sfxVolume,
+    hud.preferences?.audioMuted,
+  ]);
   return (
     <main className="game-shell immersive-shell">
       <section
@@ -3364,7 +3419,10 @@ export default function Home() {
             regionName={current.name}
             owner={currentOwner}
             inCombat={inCombat}
-            onMenu={() => setAdventureOpen(true)}
+            onMenu={() => {
+              playSound('menu');
+              setAdventureOpen(true);
+            }}
             onMap={() => openScreen('map')}
             onInventory={() => openScreen('inventory')}
             onRank={() => openScreen('rank')}
@@ -3421,7 +3479,10 @@ export default function Home() {
         {hud.job && (
           <button
             className="inventory-toggle"
-            onClick={() => setInventoryOpen(true)}
+            onClick={() => {
+              playSound('menu');
+              setInventoryOpen(true);
+            }}
           >
             <Backpack size={18} />
             持ち物 <kbd>{bindingName(bindings.inventory)}</kbd>

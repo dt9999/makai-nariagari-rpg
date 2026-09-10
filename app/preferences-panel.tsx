@@ -87,6 +87,47 @@ export function PreferencesPanel({
         </p>
       </section>
       <section>
+        <h3>サウンド</h3>
+        <label className="preference-switch" htmlFor="preference-audio-muted">
+          <span>すべての音をミュート</span>
+          <Switch
+            id="preference-audio-muted"
+            checked={value.audioMuted}
+            onCheckedChange={(v) => set('audioMuted', v)}
+          />
+        </label>
+        <Range
+          name="全体音量"
+          value={value.masterVolume}
+          min={0}
+          max={1}
+          step={0.05}
+          display={`${Math.round(value.masterVolume * 100)}%`}
+          onChange={(v) => set('masterVolume', v)}
+        />
+        <Range
+          name="BGM・環境音"
+          value={value.musicVolume}
+          min={0}
+          max={1}
+          step={0.05}
+          display={`${Math.round(value.musicVolume * 100)}%`}
+          onChange={(v) => set('musicVolume', v)}
+        />
+        <Range
+          name="攻撃・効果音"
+          value={value.sfxVolume}
+          min={0}
+          max={1}
+          step={0.05}
+          display={`${Math.round(value.sfxVolume * 100)}%`}
+          onChange={(v) => set('sfxVolume', v)}
+        />
+        <p>
+          最初の操作後に音が始まります。地域と戦闘状態に合わせて魔界の響きが変化します。
+        </p>
+      </section>
+      <section>
         <h3>視点と酔い対策</h3>
         <Range
           name="マウス感度"
@@ -207,7 +248,7 @@ export function PreferencesPanel({
         className="binding-reset"
         onClick={() => onChange({ ...DEFAULT_PREFERENCES })}
       >
-        画質・視点・配置を初期値に戻す
+        画質・音・視点・配置を初期値に戻す
       </button>
     </div>
   );
